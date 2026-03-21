@@ -5,3 +5,4 @@
 - TimerFixed - Simple timer library for implementing a fixed accumulator-based timestep
 - XML - LuaLS Typed & Relocatable version of [xml2lua's](https://github.com/manoelcampos/xml2lua) DOM XML parser
 - Tiled - [WIP] TMX LuaLS Typing and Parsing Implemention for Tiled Projects
+- Table2Str - [WIP] Pretty prints a lua type recusrively to a string
