@@ -53,7 +53,7 @@
 --- @operator mod:Vec2
 --- @operator unm:Vec2
 local Vec2 = {
-    __HOMEPAGE = 'https://github.com/notverymoe/love_libraries/blob/main/misc/shrimpvec.lua',
+    __HOMEPAGE = 'https://github.com/notverymoe/love_libraries/blob/main/misc/project/shrimpvec.lua',
     __DESCRIPTION = 'A luajit ffi-accelerated vector library, based on brinevector',
     __VERSION = '2026.03.15',
     __LICENSE = [[

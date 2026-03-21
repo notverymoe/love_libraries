@@ -6,7 +6,7 @@
 ---@field accum number
 ---@field now number
 local TimerFixed = {
-    __HOMEPAGE = 'https://github.com/notverymoe/love_libraries/blob/main/misc/timerfixed.lua',
+    __HOMEPAGE = 'https://github.com/notverymoe/love_libraries/blob/main/misc/project/timerfixed.lua',
     __DESCRIPTION = 'A simple accumulation based fixed-rate timer.',
     __VERSION = '2026.03.15',
     __LICENSE = [[
