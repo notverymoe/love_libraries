@@ -5,6 +5,10 @@
 --
 -- -- Changelog --
 --
+-- 2026-05-03
+-- - Add perp function
+-- - Add lt/gt functions
+--
 -- 2026-02-21
 -- - Add point in box and point in circle functions
 -- - Add abs and lerp functions
@@ -53,7 +57,7 @@
 --- @operator mod:Vec2
 --- @operator unm:Vec2
 local Vec2 = {
-    __HOMEPAGE = 'https://github.com/notverymoe/love_libraries/blob/main/misc/project/shrimpvec.lua',
+    __HOMEPAGE = 'https://github.com/notverymoe/love_libraries/blob/main/misc/shrimpvec.lua',
     __DESCRIPTION = 'A luajit ffi-accelerated vector library, based on brinevector',
     __VERSION = '2026.03.15',
     __LICENSE = [[
@@ -338,6 +342,13 @@ function Vec2.rotateBy(v, angle)
     )
 end
 
+--- Rotates the given vector by 90 degrees CCW
+--- @param v Vec2 The vector to rotate
+--- @return Vec2 _ The rotated vector
+function Vec2.perp(v)
+    return Vec2(-v.y,  v.x)
+end
+
 --- Calculates the linear interpolation between two vectors with the given factor
 --- @param v1 Vec2 The vector to lerp from
 --- @param v2 Vec2 The vector to lerp to
@@ -379,7 +390,7 @@ function Vec2.__add(v1, v2)
     local x1, y1 = unpackOrSplat(v1)
     local x2, y2 = unpackOrSplat(v2)
     return Vec2(
-        x1 + x2, 
+        x1 + x2,
         y1 + y2
     )
 end
@@ -442,7 +453,39 @@ end
 --- @param v2 Vec2
 --- @return boolean
 function Vec2.__eq(v1, v2)
-    return v1.x == v2.x and v1.y == v2.y
+    return rawequal(v1, v2) or (rawequal(v1, nil) and rawequal(v2, nil) and v1.x == v2.x and v1.y == v2.y)
+end
+
+--- Operator less than. Component-wise.
+--- @param v1 Vec2
+--- @param v2 Vec2
+--- @return boolean
+function Vec2.__lt(v1, v2)
+    return v1.x < v2.x and v1.y < v2.y
+end
+
+--- Operator less than/equal. Component-wise.
+--- @param v1 Vec2
+--- @param v2 Vec2
+--- @return boolean
+function Vec2.__le(v1, v2)
+    return v1.x <= v2.x and v1.y <= v2.y
+end
+
+--- Operator greater than. Component-wise.
+--- @param v1 Vec2
+--- @param v2 Vec2
+--- @return boolean
+function Vec2.__gt(v1, v2)
+    return v1.x > v2.x and v1.y > v2.y
+end
+
+--- Operator greater than/equal. Component-wise.
+--- @param v1 Vec2
+--- @param v2 Vec2
+--- @return boolean
+function Vec2.__ge(v1, v2)
+    return v1.x >= v2.x and v1.y >= v2.y
 end
 
 --- Operator not equals. Component-wise.
