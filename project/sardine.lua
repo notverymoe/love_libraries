@@ -1,7 +1,5 @@
 -- Copyright 2026 Natalie Baker -- MIT --
 
-local ffi = require("ffi")
-
 --===========================================================================--
 --#region Entities
 --===========================================================================--
@@ -10,27 +8,40 @@ local ffi = require("ffi")
 --#region IdEntity
 -------------------------------------------------------------------------------
 
-local IdEntity_t = ffi.typeof[[struct { 
-    uint32_t index; 
-    uint32_t generation;
-}]]
-
 ---@class IdEntity
 ---@field index integer
 ---@field generation integer
 local IdEntity = {}
 IdEntity.__index = IdEntity
-ffi.metatype(IdEntity_t, IdEntity)
 
---- Create a new EntityId. 
---- An index or generation of 0 is an "invalid" identifier.
----@param index      integer | nil Index of the identifier, defaults to 1
----@param generation integer | nil Generation of the identifier, defaults to 1
----@return IdEntity
-function IdEntity.new(index, generation)
-    if index      == nil then index      = 1 end
-    if generation == nil then generation = 1 end
-    return IdEntity_t(index, generation) --[[@as IdEntity]]
+if jit and jit.status() then
+    local ffi = require("ffi")
+
+    local IdEntity_t = ffi.typeof[[struct { 
+        uint32_t index; 
+        uint32_t generation;
+    }]]
+
+    ffi.metatype(IdEntity_t, IdEntity)
+
+    --- Create a new EntityId. 
+    --- An index or generation of 0 is an "invalid" identifier.
+    ---@param index      integer | nil Index of the identifier, defaults to 1
+    ---@param generation integer | nil Generation of the identifier, defaults to 1
+    ---@return IdEntity
+    function IdEntity.new(index, generation)
+        if index      == nil then index      = 1 end
+        if generation == nil then generation = 1 end
+        return IdEntity_t(index, generation) --[[@as IdEntity]]
+    end
+else
+    -- NoFFI fallback, this won't be comfortable
+
+    function IdEntity.new(index, generation)
+        if index      == nil then index      = 1 end
+        if generation == nil then generation = 1 end
+        return setmetatable({index = index, generation = generation} --[[@as IdEntity]], IdEntity)
+    end
 end
 
 --- Gets the EntityId with the next generation
@@ -1290,6 +1301,33 @@ end
 --===========================================================================--
 
 return {
+    __HOMEPAGE    = 'https://github.com/notverymoe/love_libraries/',
+    __DESCRIPTION = 'A simple archetype ECS library',
+    __VERSION     = '2026.05.03',
+    __LICENSE     = [[
+        MIT License
+
+        Copyright 2026 Natalie Baker
+
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+    ]],
+
     IdEntity           = IdEntity,        -- Tests: Initial
     EntityAllocator    = EntityAllocator, -- Tests: Initial
 

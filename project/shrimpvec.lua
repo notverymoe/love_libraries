@@ -57,9 +57,9 @@
 --- @operator mod:Vec2
 --- @operator unm:Vec2
 local Vec2 = {
-    __HOMEPAGE = 'https://github.com/notverymoe/love_libraries/blob/main/misc/shrimpvec.lua',
+    __HOMEPAGE = 'https://github.com/notverymoe/love_libraries/',
     __DESCRIPTION = 'A luajit ffi-accelerated vector library, based on brinevector',
-    __VERSION = '2026.03.15',
+    __VERSION = '2026.05.03',
     __LICENSE = [[
         MIT License
 
@@ -101,7 +101,7 @@ local ffi
 local VECTORTYPE = "cdata"
 
 if jit and jit.status() then
-    ffi = require "ffi"
+    ffi = require("ffi")
     ffi.cdef [[
         typedef struct {
             double x;
