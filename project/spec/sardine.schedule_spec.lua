@@ -1,6 +1,6 @@
 -- Copyright 2026 Natalie Baker -- MIT --
 
-local sardine = require("sardine.schedule")
+local sardine = require("sardine")
 
 ---@class luassert
 ---@field message fun(string): luassert.internal
@@ -97,8 +97,10 @@ describe("Schedule", function()
 
         schedule:run()
         assert.message("Expect systems to have counted to 10").equal(10, counter)
-    
     end)
-
 end)
+
+--TODO test setup init funcs
+--TODO test run params
+--TODO test init params
 
