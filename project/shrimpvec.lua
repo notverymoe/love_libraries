@@ -93,23 +93,39 @@ function Vec2.__newindex(t, k, v)
     error("Cannot assign a new property '" .. k .. "' to a Vec2", 2)
 end
 
---------------------------
--- Select FFI or Tables --
---------------------------
+----------------------------------------------
+-- Select FFI or Tables / Module __call new --
+----------------------------------------------
+
+--- @class ModuleVec2: Vec2
+--- @operator call:Vec2
 
 local ffi
 local VECTORTYPE = "cdata"
 
 if jit and jit.status() then
     ffi = require("ffi")
-    ffi.cdef [[
-        typedef struct {
+    local ShrimpVec_t = ffi.typeof[[struct {
             double x;
             double y;
-        } shrimpvec;
-    ]]
+    }]]
+    ffi.metatype(ShrimpVec_t, Vec2)
+    setmetatable(Vec2, {
+        __call = function(t, x, y)
+            x = x or 0
+            if y == nil then y = x end
+            return ShrimpVec_t(x, y)
+        end
+    })
 else
     VECTORTYPE = "table"
+    setmetatable(Vec2, {
+        __call =function(t, x, y)
+            x = x or 0
+            if y == nil then y = x end
+            return setmetatable({x, y}, Vec2)
+        end
+    })
 end
 
 -------------------
@@ -128,32 +144,6 @@ end
 --- Clamps to the given min-max range
 local function clamp(x, min, max)
     return math.min(math.max(min, x), max)
-end
-
-----------------
--- Module New --
-----------------
-
---- @class ModuleVec2: Vec2
---- @operator call:Vec2
-
-if ffi then
-    ffi.metatype("shrimpvec", Vec2)
-    setmetatable(Vec2, {
-        __call = function(t, x, y)
-            x = x or 0
-            if y == nil then y = x end
-            return ffi.new("shrimpvec", x, y)
-        end
-    })
-else
-    setmetatable(Vec2, {
-        __call =function(t, x, y)
-            x = x or 0
-            if y == nil then y = x end
-            return setmetatable({x, y}, Vec2)
-        end
-    })
 end
 
 ----------------
