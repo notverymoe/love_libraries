@@ -54,6 +54,10 @@ local function toStr(value, dst, indent)
         dst = dst.."<Cannot convert: "..value..">"
     elseif ty == "userdata" then
         dst = dst.."<Cannot convert: "..value..">"
+    elseif ty == "cdata" then
+        dst = dst..tostring(value)
+    else 
+        dst = dst.."<Cannot convert: "..ty..">"
     end
     
     return dst

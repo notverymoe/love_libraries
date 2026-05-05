@@ -277,7 +277,9 @@ end
 ---@param slotIdx integer
 ---@return IdEntity
 function ComponentColumn.getEntityIdFromRaw(self, slotIdx)
-    --TODO SAFETY
+    if slotIdx > self.count then
+        error("Attempt to index out of bounds, slot idx not allocated")
+    end
     local back = self._back[slotIdx]
     return self._slots[back]:withId(back)
 end
@@ -286,7 +288,9 @@ end
 ---@param slotIdx integer
 ---@return any
 function ComponentColumn.getRaw(self, slotIdx)
-    --TODO SAFETY
+    if slotIdx > self.count then
+        error("Attempt to index out of bounds, slot idx not allocated")
+    end
     return self.data[slotIdx]
 end
 
@@ -862,11 +866,13 @@ end
 
 ---@param s QueryIterState
 ---@param k QueryIterKey
+---@return QueryIterKey, QueryEntity
 function Query._iterNext(s, k)
     k.eIdx = k.eIdx + 1
     while k.eIdx > k.aCur:count() do
         k.aIdx = k.aIdx + 1
         if k.aIdx > #s.archetypes then
+            ---@diagnostic disable-next-line: return-type-mismatch
             return nil, nil
         end
         k.aCur = s.storage:getTableById(s.archetypes[k.aIdx])
@@ -877,6 +883,7 @@ end
 
 ---@param self Query
 ---@param world World
+---@return (fun(s: QueryIterState, k: QueryIterKey): (QueryIterKey, QueryEntity)), QueryIterState, QueryIterKey
 function Query.iter(self, world)
     local archetypes,_ = world._storage:query(nil, self._id)
 
@@ -1067,11 +1074,15 @@ end
 --#region System
 -------------------------------------------------------------------------------
 
+---@alias FuncInvoke fun(systemData: table, invokeArgs: any, ...: any)
+---@alias FuncInit fun(systemData: table, initArgs: any, params: any[])
+
 ---@class System
 ---@field name string
----@field userdata table
----@field _handle function
----@field _setupOps (fun(userdata: table, args: table))[]
+---@field paramList any[]
+---@field systemData any
+---@field _handleInvoke FuncInvoke
+---@field _handleInit FuncInit?
 ---@field _dependencies {[System]: true}
 ---@field _dependencyCount integer
 local System = {}
@@ -1079,45 +1090,27 @@ System.__index = System
 
 ---Create a new system
 ---@param name string
----@param handle function The handle to execute
----@param userdata table?
+---@param handleInvoke FuncInvoke
+---@param systemData table?
 ---@return System
-function System.new(name, handle, userdata)
+function System.new(name, handleInvoke, systemData)
     return setmetatable({
         name = name,
-        userdata = userdata or {},
-        _handle = handle,
-        _setupOps = {},
-        _dependencies = {},
+        paramList = {},
+        systemData = systemData or {},
+        _handleInvoke = handleInvoke,
+        _handleInit   = nil,
+        _dependencies    = {},
         _dependencyCount = 0
     }, System)
 end
 
----Registers a function that recives arguments on setup and can update userdata
 ---@param self System
----@param ... fun(userdata: table, args: table)
-function System.addSetupOps(self, ...)
-    for _,op in ipairs{...} do
-        table.insert(self._setupOps, op)
-    end
-end
-
----Adds the given key-value pair to the userdata of the function
----@param self System
----@param k any
----@param v any
-function System.addUserdata(self, k, v)
-    self.userdata[k] = v
-end
-
----Internal use, called to proccess setup ops on build
----@param self System
----@param args any
-function System._setup(self, args)
-    for _,op in ipairs(self._setupOps) do
-        op(self.userdata, args)
-    end
-    self._setupOps = {}
+---@param init FuncInit
+---@return self
+function System.withInit(self, init)
+    self._init = init
+    return self
 end
 
 ---Adds a dependency that prevents this system running before the given system
@@ -1131,6 +1124,22 @@ function System.after(self, other)
     return self
 end
 
+---Initializes the system from the given init args
+---@param self System
+---@param initArgs any
+function System._init(self, initArgs)
+    if self._handleInit ~= nil then
+        self._handleInit(self.systemData, initArgs, self.paramList)
+    end
+end
+
+---Invokes the system from the given args
+---@param self System
+---@param invokeArgs any
+function System._invoke(self, invokeArgs)
+    self._handleInvoke(self.systemData, invokeArgs, unpack(self.paramList or {}))
+end
+
 -------------------------------------------------------------------------------
 --#endregion System
 -------------------------------------------------------------------------------
@@ -1142,20 +1151,34 @@ end
 ---@class Schedule
 ---@field name string
 ---@field _systems System[]
+---@field _hasInit boolean
 local Schedule = {}
 Schedule.__index = Schedule
 
 ---@param systems System[]
 ---@return Schedule
 function Schedule.new(name, systems)
-    return setmetatable({name = name, _systems = systems}, Schedule)
+    return setmetatable({name = name, _systems = systems, _hasInit = false}, Schedule)
+end
+
+function Schedule.init(self, ...)
+    if self._hasInit then
+        error("Schedule is already initialized")
+    end
+
+    local initParams = {...}
+    for _,system in pairs(self._systems) do
+        system:_init(initParams)
+    end
+    self._hasInit = true
 end
 
 --- Runs every system in-order with the given arguments
 ---@param ... any
 function Schedule.run(self, ...)
+    local invokeParams = {...}
     for _,system in pairs(self._systems) do
-        system._handle(system.userdata, ...)
+        system:_invoke(invokeParams)
     end
 end
 
@@ -1233,9 +1256,8 @@ end
 ---order guarntees in any way when we group systems into stages, since iteration
 ---order is not guarnteed? Hopefully not, but we should check...
 ---
----@param args table?
 ---@return Schedule
-function ScheduleBuilder.build(self, args)
+function ScheduleBuilder.build(self)
     local pending = {} --[[@as {[System]: true}]]
 
     -- Initial
@@ -1283,10 +1305,6 @@ function ScheduleBuilder.build(self, args)
         for _,sortPair in ipairs(sorting) do
             table.insert(orderedSystems, sortPair.system)
         end
-    end
-
-    for _,system in ipairs(orderedSystems) do
-        system:_setup(args or {})
     end
 
     return Schedule.new(self.name, orderedSystems)
