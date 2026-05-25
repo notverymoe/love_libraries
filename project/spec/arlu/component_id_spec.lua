@@ -13,6 +13,11 @@ end
 
 describe("ComponentIds", function()
 
+    insulateIt("Component IDs are secretly numbers", function()
+        local arlu = require("arlu")
+        assert.is_number(arlu.CId.register("compAA"))
+    end)
+
     insulateIt("Allocate components UIDs", function()
         local arlu = require("arlu")
 
@@ -38,4 +43,5 @@ describe("ComponentIds", function()
         assert.are_equal(compB, 2)
         assert.are_equal(compC, 3)
     end)
+
 end)

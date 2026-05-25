@@ -1392,7 +1392,7 @@ return {
     CId            = CId,            -- Tests: Initial
     ComponentTable = ComponentTable, -- Tests: Initial
 
-    ComponentSet        = ComponentSet,        -- Tests: TODO
+    ComponentSet        = ComponentSet,        -- Tests: Initial
     ComponentSetFilter  = ComponentSetFilter,  -- Tests: TODO
     ComponentSetStorage = ComponentSetStorage, -- Tests: TODO
 
