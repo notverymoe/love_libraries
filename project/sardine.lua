@@ -285,6 +285,16 @@ function ComponentColumn.getSlotData(self, slotIdx)
     return self.data[slotIdx]
 end
 
+---@param self Sardine.ComponentColumn
+---@return fun(state: Sardine.ComponentColumn, key: Sardine.IdEntity): (Sardine.IdEntity, any), Sardine.ComponentColumn, any
+function ComponentColumn.iter(self)
+    local next, t, _ = pairs(self.data)
+    return function(self, p)
+        local k, v = next(t, p and self._slots[p.index].index)
+        return k and self._slots[self._back[k]]:withId(self._back[k]), k and v
+    end, self, nil
+end
+
 -----------------------------
 --#region Internal 
 -----------------------------

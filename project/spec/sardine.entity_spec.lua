@@ -71,7 +71,7 @@ describe("ComponentColumn", function()
         local alloc = sardine.EntityAllocator.new()
         local entityA = alloc:alloc()
         local storage = sardine.ComponentColumn.new()
-        storage:add(entityA, 126)
+        storage:set(entityA, 126)
         assert.are.equal(126, storage:get(entityA))
     end)
 
@@ -83,9 +83,9 @@ describe("ComponentColumn", function()
         local entityC = alloc:alloc()
 
         local storage = sardine.ComponentColumn.new()
-        storage:add(entityC, 1) -- Non-consecutive entity indicies
-        storage:add(entityA, 2)
-        storage:add(entityB, 3)
+        storage:set(entityC, 1) -- Non-consecutive entity indicies
+        storage:set(entityA, 2)
+        storage:set(entityB, 3)
 
         local iters = {}
         for entity, component in storage:iter() do
@@ -115,10 +115,10 @@ describe("ComponentColumn", function()
         local entityC = alloc:alloc()
 
         local storage = sardine.ComponentColumn.new()
-        storage:add(entityC, 1) -- Non-consecutive entity indicies
-        storage:add(entityA, 2)
-        storage:add(entityB, 3)
-        storage:remove(entityA)
+        storage:set(entityC, 1) -- Non-consecutive entity indicies
+        storage:set(entityA, 2)
+        storage:set(entityB, 3)
+        storage:set(entityA, nil)
 
         local iters = {}
         for entity, component in storage:iter() do
@@ -147,14 +147,14 @@ describe("ComponentColumn", function()
         local entityD = alloc:alloc()
 
         local storage = sardine.ComponentColumn.new()
-        storage:add(entityC, 1) -- Non-consecutive entity indicies
-        storage:add(entityA, 2)
-        storage:add(entityB, 3)
-        storage:add(entityD, 4)
+        storage:set(entityC, 1) -- Non-consecutive entity indicies
+        storage:set(entityA, 2)
+        storage:set(entityB, 3)
+        storage:set(entityD, 4)
 
         -- Remove & Add
-        storage:remove(entityA)
-        storage:add(entityA, 5)
+        storage:set(entityA, nil)
+        storage:set(entityA, 5)
 
         local iters = {}
         for entity, component in storage:iter() do
@@ -187,13 +187,13 @@ describe("ComponentColumn", function()
         local entityD = alloc:alloc()
 
         local storage = sardine.ComponentColumn.new()
-        storage:add(entityC, 1) -- Non-consecutive entity indicies
-        storage:add(entityA, 2)
-        storage:add(entityB, 3)
+        storage:set(entityC, 1) -- Non-consecutive entity indicies
+        storage:set(entityA, 2)
+        storage:set(entityB, 3)
 
         -- Remove & Add
-        storage:remove(entityA)
-        storage:add(entityD, 4)
+        storage:set(entityA, nil)
+        storage:set(entityD, 4)
 
         local iters = {}
         for entity, component in storage:iter() do
