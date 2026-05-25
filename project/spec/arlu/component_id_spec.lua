@@ -11,7 +11,7 @@ local function insulateIt(name, block)
     end)
 end
 
-describe("ComponentStorage", function()
+describe("ComponentIds", function()
 
     insulateIt("Allocate components UIDs", function()
         local arlu = require("arlu")

@@ -80,7 +80,7 @@ end
 --#region EntityAllocator
 -------------------------------------------------------------------------------
 
----@class EntityAllocator
+---@class arlu.EntityAllocator
 ---@field _freelist arlu.EId[]
 ---@field _freecount integer
 ---@field _next integer
@@ -88,7 +88,7 @@ local EntityAllocator = {}
 EntityAllocator.__index = EntityAllocator
 
 ---Creates a new EntityId allocator
----@return EntityAllocator
+---@return arlu.EntityAllocator
 function EntityAllocator.new()
     return setmetatable(
         {_next = 0, _freelist = {}, _freecount = 0},
@@ -97,6 +97,7 @@ function EntityAllocator.new()
 end
 
 ---Allocates a single new EntityId
+---@param self arlu.EntityAllocator
 ---@return arlu.EId
 function EntityAllocator.alloc(self)
     if self._freecount > 0 then
@@ -108,12 +109,46 @@ function EntityAllocator.alloc(self)
     end
 end
 
----Frees a single EntityId for reuse with a newer generation
----@param id arlu.EId The identifier to free for reuse
+---Checks if an id is probably allocated. Cannot confirm if
+---a particular generation is allocated or not, because we
+---don't track live genration indicies. So don't use this method
+---in real code, only tests. This is potentially very slow.
+---@param self arlu.EntityAllocator
+---@param eId arlu.EId The identifier to free for reuse
+function EntityAllocator._isProbablyAllocated(self, eId)
+    if eId.index > self._next then return false end
+    for idx=1,self._freecount do
+        if self._freelist[idx].index == eId.index then
+            return false
+        end
+    end
+    return true
+end
+
+---Frees a single EntityId for reuse with a newer generation. Checks
+---for a double-free, but does not check for a correct generation.
+---Ensure only the latest generation is freed, otherwise generation
+---reuse will occur! This is potentially very slow, prefer `freeUnchecked`
+---when you have some external guarntee.
+---@param self arlu.EntityAllocator
+---@param eId arlu.EId
+function EntityAllocator.freeSlow(self, eId)
+    if not self:_isProbablyAllocated(eId) then
+        error("Entity id already freed or could not have been allocated yet")
+    end
+    self:freeUnchecked(eId)
+end
+
+---Frees a single EntityId for reuse with a newer generation. Does
+---not check for a double-free or the latest generation. Unsafe, but
+---should be used in most cases relying on guantees from other
+---sources (ie. associated data existing).
+---@param self arlu.EntityAllocator
+---@param eId arlu.EId
 ---@warning This method cannot verify if an id has been freed previously or is still valid
-function EntityAllocator.freeUnchecked(self, id)
+function EntityAllocator.freeUnchecked(self, eId)
     self._freecount = self._freecount + 1
-    table.insert(self._freelist, self._freecount, id:next())
+    table.insert(self._freelist, self._freecount, eId:next())
 end
 
 
@@ -949,7 +984,7 @@ end
 ------------------------------------------------------------------------------
 
 ---@class arlu.World
----@field _allocator EntityAllocator
+---@field _allocator arlu.EntityAllocator
 ---@field _storage arlu.ArchetypeStorage
 ---@field _archetypeLookup arlu.ComponentTable
 local World = {}
