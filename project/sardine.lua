@@ -8,7 +8,7 @@
 --#region IdEntity
 -------------------------------------------------------------------------------
 
----@class IdEntity
+---@class Sardine.IdEntity
 ---@field index integer
 ---@field generation integer
 local IdEntity = {}
@@ -28,11 +28,11 @@ if jit and jit.status() then
     --- An index or generation of 0 is an "invalid" identifier.
     ---@param index      integer | nil Index of the identifier, defaults to 1
     ---@param generation integer | nil Generation of the identifier, defaults to 1
-    ---@return IdEntity
+    ---@return Sardine.IdEntity
     function IdEntity.new(index, generation)
         if index      == nil then index      = 1 end
         if generation == nil then generation = 1 end
-        return IdEntity_t(index, generation) --[[@as IdEntity]]
+        return IdEntity_t(index, generation) --[[@as Sardine.IdEntity]]
     end
 else
     -- NoFFI fallback, this won't be comfortable
@@ -40,19 +40,19 @@ else
     function IdEntity.new(index, generation)
         if index      == nil then index      = 1 end
         if generation == nil then generation = 1 end
-        return setmetatable({index = index, generation = generation} --[[@as IdEntity]], IdEntity)
+        return setmetatable({index = index, generation = generation} --[[@as Sardine.IdEntity]], IdEntity)
     end
 end
 
 --- Gets the EntityId with the next generation
 ---@param id integer
----@return IdEntity
+---@return Sardine.IdEntity
 function IdEntity.withId(self, id)
     return IdEntity.new(id, self.generation)
 end
 
 --- Gets the EntityId with the next generation
----@return IdEntity
+---@return Sardine.IdEntity
 function IdEntity.next(self)
     return IdEntity.new(self.index, self.generation+1)
 end
@@ -61,6 +61,13 @@ end
 ---@return boolean
 function IdEntity.isValid(self)
     return self.index > 0 and self.generation > 0
+end
+
+---@param a Sardine.IdEntity
+---@param b Sardine.IdEntity
+---@return boolean
+function IdEntity.__eq(a, b)
+    return a.index == b.index and a.generation == b.generation
 end
 
 -------------------------------------------------------------------------------
@@ -72,7 +79,7 @@ end
 -------------------------------------------------------------------------------
 
 ---@class EntityAllocator
----@field _freelist IdEntity[]
+---@field _freelist Sardine.IdEntity[]
 ---@field _freecount integer
 ---@field _next integer
 local EntityAllocator = {}
@@ -88,7 +95,7 @@ function EntityAllocator.new()
 end
 
 ---Allocates a single new EntityId
----@return IdEntity
+---@return Sardine.IdEntity
 function EntityAllocator.alloc(self)
     if self._freecount > 0 then
         self._freecount = self._freecount-1
@@ -100,7 +107,7 @@ function EntityAllocator.alloc(self)
 end
 
 ---Frees a single EntityId for reuse with a newer generation
----@param id IdEntity The identifier to free for reuse
+---@param id Sardine.IdEntity The identifier to free for reuse
 ---@warning This method cannot verify if an id has been freed previously or is still valid
 function EntityAllocator.freeUnchecked(self, id)
     self._freecount = self._freecount + 1
@@ -124,9 +131,9 @@ end
 --#region IdComponent
 ------------------------------------------------------------------------------
 
----@class IdComponent
+---@class Sardine.IdComponent
 
----@class ModuleIdComponent
+---@class Sardine.ModuleIdComponent
 ---@field _next integer
 ---@field _data {name: string, uid: string}[]
 ---@field _lookup table<string, integer>
@@ -139,7 +146,7 @@ local IdComponent = {
 ---Register a component
 ---@param name string Name of the component, should be unique or provide uid in options
 ---@param options { uid: string? }? Options to configure the registered component with
----@return IdComponent
+---@return Sardine.IdComponent
 ---@nodiscard
 function IdComponent.register(name, options)
     options = options or {}
@@ -155,7 +162,7 @@ function IdComponent.register(name, options)
     IdComponent._lookup[uid] = id
     IdComponent._data[id] = {name = name, uid = uid}
 
-    return id --[[@as IdComponent]]
+    return id --[[@as Sardine.IdComponent]]
 end
 
 ---Gets the name of the given component ID
@@ -183,10 +190,10 @@ function IdComponent.toUID(id)
 end
 
 ---Gets the component ID of the given component UID
----@return IdComponent
+---@return Sardine.IdComponent
 ---@nodiscard
 function IdComponent.fromUID(uid)
-    return IdComponent._lookup[uid] --[[@as IdComponent]]
+    return IdComponent._lookup[uid] --[[@as Sardine.IdComponent]]
 end
 
 ------------------------------------------------------------------------------
@@ -197,86 +204,70 @@ end
 --#region ComponentColumn
 -------------------------------------------------------------------------------
 
----@class ComponentColumn
+---@class Sardine.ComponentColumn
 ---@field count integer
----@field _slots IdEntity[]
+---@field _slots Sardine.IdEntity[]
 ---@field data any[]
 ---@field _back integer[]
 local ComponentColumn = {}
 ComponentColumn.__index = ComponentColumn
 
 ---Creates a new storage for EntityId-associated data
----@return ComponentColumn
+---@return Sardine.ComponentColumn
 function ComponentColumn.new()
     return setmetatable(
         {count = 0, data = {}, _slots = {}, _back = {}},
         ComponentColumn
-    ) --[[@as ComponentColumn]]
+    ) --[[@as Sardine.ComponentColumn]]
 end
 
----@param self ComponentColumn
----@return fun(state: ComponentColumn, key: integer): (integer, any), ComponentColumn, any
-function ComponentColumn.iterFast(self)
-    return pairs(self.data)
-end
-
----@param self ComponentColumn
----@return fun(state: ComponentColumn, key: IdEntity): (IdEntity, any), ComponentColumn, any
-function ComponentColumn.iter(self)
-    local next, t, _ = pairs(self.data)
-    return function(self, p)
-        local k, v = next(t, p and self._slots[p.index].index)
-        return k and self._slots[self._back[k]]:withId(self._back[k]), k and v
-    end, self, nil
-end
-
-local ZERO_SLOT = IdEntity.new(0,0)
-
-function ComponentColumn._getSlot(self, entityId)
-    return self._slots[entityId.index] or ZERO_SLOT
-end
-
----Adds a new value associated with the given EntityId
----@param entityId IdEntity
+---@param self Sardine.ComponentColumn
+---@param entityId Sardine.IdEntity
 ---@param value any
-function ComponentColumn.add(self, entityId, value)
-    if(self:_getSlot(entityId).generation > entityId.generation) then
-        error("Slot already used with newer generation, cannot reuse older generation")
-    end
-    self.count = self.count + 1
-    self._slots[entityId.index] = IdEntity.new(self.count, entityId.generation)
-    self._back[self.count] = entityId.index
-    self.data[self.count] = value
-end
-
----Sets data currently associated with the given EntityId to a new value
----@param entityId IdEntity The identifier to update the value of
----@param value any The new value to associate
-function ComponentColumn.set(self, entityId, value)
-    self.count = self.count + 1
-    local slot = self:_getSlot(entityId)
-    if (slot.index      <= 0              ) then error("EntityId is not allocated") end
-    if (slot.generation ~= entityId.generation) then error("EntityId generation does not match slot generation") end
-    self.data[slot.index] = value
-end
-
----Adds or sets data currently associated with the given EntityId to a new value
----@param entityId IdEntity The identifier to update the value of
----@param value any The new value to associate
-function ComponentColumn.addOrSet(self, entityId, value)
-    self.count = self.count + 1
-    local slot = self:_getSlot(entityId)
-    if (slot.index <= 0) or (slot.generation ~= entityId.generation) then
-        self:add(entityId, value)
+---@param force boolean?
+---@return any
+function ComponentColumn.set(self, entityId, value, force)
+    local existing = self:_getSlot(entityId)
+    if value == nil then
+        if (not force) and (existing.generation ~= entityId.generation) then
+            error("Entity ID generation mismatch.")
+        end
+        return self:_remove(existing)
+    elseif (existing.index > 0) then
+        if (not force) and (existing.generation ~= entityId.generation) then
+            error("Slot already contains a different generation, cannot reuse unless forced or removed first.")
+        end
+        return self:_set(entityId, value, existing)
     else
-        self.data[slot.index] = value
+        if (not force) and (existing.generation > entityId.generation) then
+            error("Slot previously used for a newer generation, cannot add older generation unless forced.")
+        end
+        return self:_add(entityId, value)
     end
+end
+
+---@param entityId Sardine.IdEntity
+---@return any
+function ComponentColumn.get(self, entityId)
+    self.count = self.count + 1
+    local slot = self:_getSlot(entityId)
+    if (slot.index      <=                   0) then return nil end
+    if (slot.generation ~= entityId.generation) then return nil end
+    return self.data[slot.index]
+end
+
+---@param entityId Sardine.IdEntity
+---@param init fun(): any
+---@param force boolean?
+---@return any
+function ComponentColumn.getOrSet(self, entityId, init, force)
+    return self:get(entityId) or self:set(entityId, init(), force)
 end
 
 ---Gets the data in the given slot index
 ---@param slotIdx integer
----@return IdEntity
-function ComponentColumn.getEntityIdFromRaw(self, slotIdx)
+---@return Sardine.IdEntity
+function ComponentColumn.getEntityIdForSlot(self, slotIdx)
     if slotIdx > self.count then
         error("Attempt to index out of bounds, slot idx not allocated")
     end
@@ -287,57 +278,46 @@ end
 ---Gets the data in the given slot index
 ---@param slotIdx integer
 ---@return any
-function ComponentColumn.getRaw(self, slotIdx)
+function ComponentColumn.getSlotData(self, slotIdx)
     if slotIdx > self.count then
         error("Attempt to index out of bounds, slot idx not allocated")
     end
     return self.data[slotIdx]
 end
 
----Gets the data currently associated with the given EntityId
----@param entityId IdEntity
+-----------------------------
+--#region Internal 
+-----------------------------
+
+---@param entityId Sardine.IdEntity
+---@param value any
 ---@return any
-function ComponentColumn.get(self, entityId)
+function ComponentColumn._add(self, entityId, value)
     self.count = self.count + 1
-    local slot = self:_getSlot(entityId)
-    if (slot.index      <=               0) then error("EntityId is not allocated") end
-    if (slot.generation ~= entityId.generation) then error("EntityId generation does not match slot generation") end
-    return self.data[slot.index]
+    self._slots[entityId.index] = IdEntity.new(self.count, entityId.generation)
+    self._back[self.count] = entityId.index
+    self.data[self.count] = value
+    return value
 end
 
----Tries to get the data currently associated with the given EntityId, or nil if not assigned
----@param entityId IdEntity
+---@param entityId Sardine.IdEntity The identifier to update the value of
+---@param value any The new value to associate
+---@param slot Sardine.IdEntity
 ---@return any
-function ComponentColumn.tryGet(self, entityId)
-    self.count = self.count + 1
-    local slot = self:_getSlot(entityId)
-    if (slot.index      <=               0) then return nil end
-    if (slot.generation ~= entityId.generation) then return nil end
-    return self.data[slot.index]
+function ComponentColumn._set(self, entityId, value, slot)
+    slot.generation = entityId.generation
+    self.data[slot.index] = value
+    return value
 end
 
----Gets the data currently associated with the given EntityId
----@param entityId IdEntity
+---@param self Sardine.ComponentColumn
+---@param slot Sardine.IdEntity
 ---@return any
-function ComponentColumn.getOrSet(self, entityId, defVal)
-    self.count = self.count + 1
-    local slot = self:_getSlot(entityId)
-    if (slot.index <= 0) or (slot.generation ~= entityId.generation) then
-        local val = defVal()
-        self:add(entityId, val)
-        return val
-    else
-        return self.data[slot.index]
+function ComponentColumn._remove(self, slot)
+    -- Check if it's already removed, no-op
+    if (slot.index <= 0) then
+        return nil
     end
-end
-
---- Removes the data associated with the current EntityId and prevents
---- reusing the EntityId in future new associations.
----@param entityId IdEntity
----@return any _ The last value associated with the given id
-function ComponentColumn.remove(self, entityId)
-    local slot = self:_getSlot(entityId)
-    if slot.index <= 0 then error("EntityId is not allocated") end
 
     -- Move slot to end of data
     local slotValue = self.data[slot.index]
@@ -357,6 +337,14 @@ function ComponentColumn.remove(self, entityId)
     return slotValue
 end
 
+function ComponentColumn._getSlot(self, entityId)
+    return self._slots[entityId.index] or IdEntity.new(0,0)
+end
+
+-----------------------------
+--#endregion Internal 
+-----------------------------
+
 -------------------------------------------------------------------------------
 --#endregion ComponentColumn
 -------------------------------------------------------------------------------
@@ -373,14 +361,14 @@ end
 --#region ComponentSet
 ------------------------------------------------------------------------------
 
----@alias ComponentSet table<IdComponent, any>
+---@alias Sardine.ComponentSet table<Sardine.IdComponent, any>
 
 ---@class ModuleComponentSet
 local ComponentSet = {}
 
 --- Checks if all components listed in `a` exist in `b`
----@param a ComponentSet
----@param b ComponentSet
+---@param a Sardine.ComponentSet
+---@param b Sardine.ComponentSet
 ---@return boolean
 ---@nodiscard
 function ComponentSet.all(a, b)
@@ -393,8 +381,8 @@ function ComponentSet.all(a, b)
 end
 
 --- Checks if any component listed in `a` exists in `b`
----@param a ComponentSet
----@param b ComponentSet
+---@param a Sardine.ComponentSet
+---@param b Sardine.ComponentSet
 ---@return boolean
 ---@nodiscard
 function ComponentSet.any(a, b)
@@ -407,8 +395,8 @@ function ComponentSet.any(a, b)
 end
 
 --- Checks that `a`and `b` list exactly the same components
----@param a ComponentSet
----@param b ComponentSet
+---@param a Sardine.ComponentSet
+---@param b Sardine.ComponentSet
 ---@return boolean
 ---@nodiscard
 function ComponentSet.exact(a, b)
@@ -442,30 +430,30 @@ end
 --#region ComponentSetFilter
 ------------------------------------------------------------------------------
 
----@alias ComponentSetFilter {includes: ComponentSet, excludes: ComponentSet} | ComponentSet
+---@alias Sardine.ComponentSetFilter {includes: Sardine.ComponentSet, excludes: Sardine.ComponentSet} | Sardine.ComponentSet
 
----@class ModuleComponentSetFilter
+---@class Sardine.ModuleComponentSetFilter
 local ComponentSetFilter = {}
 
 ---Returns the ComponentSet representing the included (required) components
----@param a ComponentSetFilter
----@return ComponentSet
+---@param a Sardine.ComponentSetFilter
+---@return Sardine.ComponentSet
 ---@nodiscard
 function ComponentSetFilter.includes(a)
     return a.includes or a
 end
 
 ---Returns the ComponentSet representing the excluded components
----@param a ComponentSetFilter
----@return ComponentSet
+---@param a Sardine.ComponentSetFilter
+---@return Sardine.ComponentSet
 ---@nodiscard
 function ComponentSetFilter.excludes(a)
     return a.excludes or {}
 end
 
 ---Checks if `a` will accept `b`
----@param a ComponentSetFilter filter
----@param b ComponentSet item
+---@param a Sardine.ComponentSetFilter filter
+---@param b Sardine.ComponentSet item
 ---@return boolean
 ---@nodiscard
 function ComponentSetFilter.accepts(a, b)
@@ -474,8 +462,8 @@ function ComponentSetFilter.accepts(a, b)
 end
 
 ---Checks if `a` is eaxctly the same as `b`
----@param a ComponentSetFilter filter
----@param b ComponentSetFilter filter
+---@param a Sardine.ComponentSetFilter filter
+---@param b Sardine.ComponentSetFilter filter
 ---@return boolean
 ---@nodiscard
 function ComponentSetFilter.exact(a, b)
@@ -496,9 +484,9 @@ end
 --#region ComponentSetStorage
 ------------------------------------------------------------------------------
 
----@class ComponentSetStorage
+---@class Sardine.ComponentSetStorage
 ---@field _next integer
----@field _groups table<IdComponent, {key: ComponentSetFilter, idx: integer}[]>
+---@field _groups table<Sardine.IdComponent, {key: Sardine.ComponentSetFilter, idx: integer}[]>
 ---@field _data any[]
 local ComponentSetStorage = {}
 ComponentSetStorage.__index = ComponentSetStorage
@@ -508,8 +496,8 @@ function ComponentSetStorage.new()
 end
 
 ---Insert a new entry or replace an existing entry
----@param self ComponentSetStorage
----@param k ComponentSetFilter The composite key to associate with
+---@param self Sardine.ComponentSetStorage
+---@param k Sardine.ComponentSetFilter The composite key to associate with
 ---@param v any The value to associate with the composite key
 ---@return integer idx The data index inserted at
 function ComponentSetStorage.insert(self, k, v)
@@ -535,8 +523,8 @@ function ComponentSetStorage.remove(self, k)
 end
 
 ---Finds all composite keys that accept the given components
----@param self ComponentSetStorage
----@param components ComponentSet The list of components search with
+---@param self Sardine.ComponentSetStorage
+---@param components Sardine.ComponentSet The list of components search with
 ---@return table<integer, any> results Pairs of data index and data that accepted the given component set
 ---@nodiscard
 function ComponentSetStorage.query(self, components)
@@ -555,8 +543,8 @@ function ComponentSetStorage.query(self, components)
 end
 
 ---Gets the data associated with the given key
----@param self ComponentSetStorage
----@param k ComponentSetFilter The composite key to lookup
+---@param self Sardine.ComponentSetStorage
+---@param k Sardine.ComponentSetFilter The composite key to lookup
 ---@return any data The data associated with the given composite key, or nil if it doesn't exist
 ---@nodiscard
 function ComponentSetStorage.getByKey(self, k)
@@ -565,7 +553,7 @@ function ComponentSetStorage.getByKey(self, k)
 end
 
 ---Gets data by the raw index
----@param self ComponentSetStorage
+---@param self Sardine.ComponentSetStorage
 ---@param idx integer The index of the data to get
 ---@return any data The data stored at the given index, or nil if it doesn't exist
 ---@nodiscard
@@ -574,8 +562,8 @@ function ComponentSetStorage.getByIdx(self, idx)
 end
 
 ---Finds the data index of the given key, or nil if it doesn't exist
----@param self ComponentSetStorage
----@param k ComponentSetFilter
+---@param self Sardine.ComponentSetStorage
+---@param k Sardine.ComponentSetFilter
 ---@return integer? index The data index of the key
 ---@nodiscard
 function ComponentSetStorage.indexOf(self, k)
@@ -606,24 +594,24 @@ end
 --#region Archetypes
 --===========================================================================--
 
----@class IdArchetype
+---@class Sardine.IdArchetype
 
----@class IdQuery
+---@class Sardine.IdQuery
 
 ------------------------------------------------------------------------------
 --#region ArchetypeTable
 ------------------------------------------------------------------------------
 
----@class ArchetypeTable
----@field components ComponentSet
----@field columns table<IdComponent, ComponentColumn>
+---@class Sardine.ArchetypeTable
+---@field components Sardine.ComponentSet
+---@field columns table<Sardine.IdComponent, Sardine.ComponentColumn>
 local ArchetypeTable = {}
 ArchetypeTable.__index = ArchetypeTable
 
 --TODO flatten ComponentColumn into ArchetypeTable to remove redundant lookups and back tables
 
----@param components ComponentSet
----@return ArchetypeTable
+---@param components Sardine.ComponentSet
+---@return Sardine.ArchetypeTable
 function ArchetypeTable.new(components)
     local columns = {}
     for id,_ in pairs(components) do
@@ -635,60 +623,60 @@ function ArchetypeTable.new(components)
     )
 end
 
----@param self ArchetypeTable
----@param entity IdEntity
----@param components ComponentSet
+---@param self Sardine.ArchetypeTable
+---@param entity Sardine.IdEntity
+---@param components Sardine.ComponentSet
 function ArchetypeTable.insert(self, entity, components)
     if not ComponentSet.exact(self.components, components) then
         error("Inserted components do not match archetype columns")
     end
     for id,component in pairs(components) do
-        self.columns[id]:add(entity, component)
+        self.columns[id]:set(entity, component)
     end
 end
 
----@param self ArchetypeTable
----@param entity IdEntity
----@param component IdComponent
+---@param self Sardine.ArchetypeTable
+---@param entity Sardine.IdEntity
+---@param component Sardine.IdComponent
 ---@return any
 function ArchetypeTable.get(self, entity, component)
     return self.columns[component]:get(entity)
 end
 
----@param self ArchetypeTable
+---@param self Sardine.ArchetypeTable
 ---@param entitySlot integer
----@param component IdComponent
+---@param component Sardine.IdComponent
 ---@return any
-function ArchetypeTable.getRaw(self, entitySlot, component)
-    return self.columns[component]:getRaw(entitySlot)
+function ArchetypeTable.getSlotData(self, entitySlot, component)
+    return self.columns[component]:getSlotData(entitySlot)
 end
 
----@param self ArchetypeTable
+---@param self Sardine.ArchetypeTable
 ---@param entitySlot integer
 ---@return any
-function ArchetypeTable.getEntityIdFromRaw(self, entitySlot)
-    return self:_firstColumn():getEntityIdFromRaw(entitySlot)
+function ArchetypeTable.getEntityIdForSlot(self, entitySlot)
+    return self:_firstColumn():getEntityIdForSlot(entitySlot)
 end
 
----@param self ArchetypeTable
----@return ComponentColumn
+---@param self Sardine.ArchetypeTable
+---@return Sardine.ComponentColumn
 function ArchetypeTable._firstColumn(self)
     return select(2, next(self.columns))
 end
 
----@param self ArchetypeTable
+---@param self Sardine.ArchetypeTable
 ---@return integer
 function ArchetypeTable.count(self)
     return self:_firstColumn().count
 end
 
----@param self ArchetypeTable
----@param entity IdEntity
----@return ComponentSet
+---@param self Sardine.ArchetypeTable
+---@param entity Sardine.IdEntity
+---@return Sardine.ComponentSet
 function ArchetypeTable.remove(self, entity)
     local components = {}
     for id,_ in pairs(self.components) do
-        components[id] = self.columns[id]:remove(entity)
+        components[id] = self.columns[id]:set(entity, nil)
     end
     return components
 end
@@ -701,13 +689,13 @@ end
 --#region ArchetypeStorage
 ------------------------------------------------------------------------------
 
----@class ArchetypeStorage
----@field _archetypes ComponentSetStorage
----@field _queries    ComponentSetStorage
+---@class Sardine.ArchetypeStorage
+---@field _archetypes Sardine.ComponentSetStorage
+---@field _queries    Sardine.ComponentSetStorage
 local ArchetypeStorage = {}
 ArchetypeStorage.__index = ArchetypeStorage
 
----@return ArchetypeStorage
+---@return Sardine.ArchetypeStorage
 function ArchetypeStorage.new()
     return setmetatable({
         _archetypes=ComponentSetStorage.new(),
@@ -715,31 +703,31 @@ function ArchetypeStorage.new()
     }, ArchetypeStorage)
 end
 
----@param self ArchetypeStorage
----@param id IdArchetype
----@return ArchetypeTable
+---@param self Sardine.ArchetypeStorage
+---@param id Sardine.IdArchetype
+---@return Sardine.ArchetypeTable
 function ArchetypeStorage.getTableById(self, id)
-    return self._archetypes:getByIdx(id --[[@as integer]]) --[[@as ArchetypeTable]]
+    return self._archetypes:getByIdx(id --[[@as integer]]) --[[@as Sardine.ArchetypeTable]]
 end
 
----@param self ArchetypeStorage
----@param components ComponentSet
----@return ArchetypeTable
----@return IdArchetype
+---@param self Sardine.ArchetypeStorage
+---@param components Sardine.ComponentSet
+---@return Sardine.ArchetypeTable
+---@return Sardine.IdArchetype
 function ArchetypeStorage.getTable(self, components)
     local idx = self._archetypes:indexOf(components)
-    return idx and self._archetypes:getByIdx(idx) --[[@as ArchetypeTable]], idx --[[@as IdArchetype]]
+    return idx and self._archetypes:getByIdx(idx) --[[@as Sardine.ArchetypeTable]], idx --[[@as Sardine.IdArchetype]]
 end
 
----@param self ArchetypeStorage
----@param components ComponentSet
----@return ArchetypeTable
----@return IdArchetype
+---@param self Sardine.ArchetypeStorage
+---@param components Sardine.ComponentSet
+---@return Sardine.ArchetypeTable
+---@return Sardine.IdArchetype
 function ArchetypeStorage.getOrCreateTable(self, components)
     local existing, idx = self:getTable(components)
     if existing == nil then
         existing = ArchetypeTable.new(components)
-        idx = self._archetypes:insert(components, existing) --[[@as IdArchetype]]
+        idx = self._archetypes:insert(components, existing) --[[@as Sardine.IdArchetype]]
         for _,data in pairs(self._queries:query(components)) do
             table.insert(data, idx)
         end
@@ -748,29 +736,29 @@ function ArchetypeStorage.getOrCreateTable(self, components)
 end
 
 ---Run a query (cached) over all archetype component sets
----@param self ArchetypeStorage
+---@param self Sardine.ArchetypeStorage
 ---@param filter any The filter to run over the archetype component sets
----@param idCache IdQuery? The cache index for the filter, faster if provided
----@return IdArchetype[] archetypes List of archetype ids that match the filter
----@return IdQuery idCache The cache index associated with the given filter
+---@param idCache Sardine.IdQuery? The cache index for the filter, faster if provided
+---@return Sardine.IdArchetype[] archetypes List of archetype ids that match the filter
+---@return Sardine.IdQuery idCache The cache index associated with the given filter
 function ArchetypeStorage.query(self, filter, idCache)
     if idCache == nil then
-        idCache = self._queries:indexOf(filter) --[[@as IdQuery?]]
+        idCache = self._queries:indexOf(filter) --[[@as Sardine.IdQuery?]]
     end
     if idCache == nil then
-        idCache = self._queries:insert(filter, self:queryRaw(filter)) --[[@as IdQuery]]
+        idCache = self._queries:insert(filter, self:queryRaw(filter)) --[[@as Sardine.IdQuery]]
     end
     return self._queries:getByIdx(idCache --[[@as integer]]), idCache
 end
 
 ---Run a query (uncached) over all archetype component sets
----@param self ArchetypeStorage
----@param filter ComponentSetFilter
----@return IdArchetype[]
+---@param self Sardine.ArchetypeStorage
+---@param filter Sardine.ComponentSetFilter
+---@return Sardine.IdArchetype[]
 function ArchetypeStorage.queryRaw(self, filter)
     local results = {}
     for idx,data in pairs(self._archetypes:query(ComponentSetFilter.includes(filter))) do
-        local archetypeTable = data --[[@as ArchetypeTable]]
+        local archetypeTable = data --[[@as Sardine.ArchetypeTable]]
         if not ComponentSet.any(ComponentSetFilter.excludes(filter), archetypeTable.components) then
             table.insert(results, idx)
         end
@@ -794,8 +782,8 @@ end
 --#region QueryEntity
 ------------------------------------------------------------------------------
 
----@class QueryEntity
----@field _archetype ArchetypeTable
+---@class Sardine.QueryEntity
+---@field _archetype Sardine.ArchetypeTable
 ---@field _entityRaw integer
 local QueryEntity = {}
 QueryEntity.__index = QueryEntity
@@ -804,10 +792,10 @@ function QueryEntity._new(archetype, entity)
     return setmetatable({_archetype=archetype, _entityRaw=entity}, QueryEntity)
 end
 
----@param self QueryEntity
----@param archetype ArchetypeTable
+---@param self Sardine.QueryEntity
+---@param archetype Sardine.ArchetypeTable
 ---@param entitySlot integer
----@return QueryEntity
+---@return Sardine.QueryEntity
 function QueryEntity._reset(self, archetype, entitySlot)
     self._archetype = archetype
     self._entityRaw = entitySlot
@@ -815,11 +803,11 @@ function QueryEntity._reset(self, archetype, entitySlot)
 end
 
 function QueryEntity.id(self)
-    return self._archetype:getEntityIdFromRaw(self._entityRaw)
+    return self._archetype:getEntityIdForSlot(self._entityRaw)
 end
 
 function QueryEntity.component(self, id)
-    return self._archetype:getRaw(self._entityRaw, id)
+    return self._archetype:getSlotData(self._entityRaw, id)
 end
 
 ------------------------------------------------------------------------------
@@ -830,8 +818,8 @@ end
 --#region Query
 ------------------------------------------------------------------------------
 
----@class Query
----@field _id IdQuery
+---@class Sardine.Query
+---@field _id Sardine.IdQuery
 local Query = {}
 Query.__index = Query
 
@@ -839,9 +827,9 @@ function Query.new(id)
     return setmetatable({_id=id}, Query)
 end
 
----@param self Query
----@param world World
----@return IdEntity[]
+---@param self Sardine.Query
+---@param world Sardine.World
+---@return Sardine.IdEntity[]
 function Query.collect(self, world)
     local archetypes,_ = world._storage:query(nil, self._id)
     local entities = {}
@@ -854,19 +842,19 @@ function Query.collect(self, world)
     return entities
 end
 
----@class QueryIterState
----@field archetypes IdArchetype[]
----@field storage ArchetypeStorage
+---@class Sardine.QueryIterState
+---@field archetypes Sardine.IdArchetype[]
+---@field storage Sardine.ArchetypeStorage
 
----@class QueryIterKey
----@field aCur ArchetypeTable
+---@class Sardine.QueryIterKey
+---@field aCur Sardine.ArchetypeTable
 ---@field aIdx integer
 ---@field eIdx integer
----@field eQur QueryEntity
+---@field eQur Sardine.QueryEntity
 
----@param s QueryIterState
----@param k QueryIterKey
----@return QueryIterKey, QueryEntity
+---@param s Sardine.QueryIterState
+---@param k Sardine.QueryIterKey
+---@return Sardine.QueryIterKey, Sardine.QueryEntity
 function Query._iterNext(s, k)
     k.eIdx = k.eIdx + 1
     while k.eIdx > k.aCur:count() do
@@ -881,19 +869,19 @@ function Query._iterNext(s, k)
     return k, k.eQur:_reset(k.aCur, k.eIdx)
 end
 
----@param self Query
----@param world World
----@return (fun(s: QueryIterState, k: QueryIterKey): (QueryIterKey, QueryEntity)), QueryIterState, QueryIterKey
+---@param self Sardine.Query
+---@param world Sardine.World
+---@return (fun(s: Sardine.QueryIterState, k: Sardine.QueryIterKey): (Sardine.QueryIterKey, Sardine.QueryEntity)), Sardine.QueryIterState, Sardine.QueryIterKey
 function Query.iter(self, world)
     local archetypes,_ = world._storage:query(nil, self._id)
 
-    ---@type QueryIterState
+    ---@type Sardine.QueryIterState
     local state = {
         archetypes=archetypes,
         storage=world._storage
     }
 
-    ---@type QueryIterKey
+    ---@type Sardine.QueryIterKey
     local key = {
         aCur=world._storage:getTableById(archetypes[1]),
         aIdx=1,
@@ -915,13 +903,13 @@ end
 ---Creates a system setup function that initializes
 ---a query from the world and passes it as userdata
 ---@param name string
----@param includes IdComponent[]
----@param excludes IdComponent[]
+---@param includes Sardine.IdComponent[]
+---@param excludes Sardine.IdComponent[]
 ---@return fun(userdata: table, args: table)
 function SystemQuery(name, includes, excludes)
     local filter = {includes=includes or {}, excludes=excludes or {}}
     return function(userdata, args)
-        local world = args.world --[[@as World]]
+        local world = args.world --[[@as Sardine.World]]
         local query = world:query(filter)
         userdata[name] = query
     end
@@ -936,15 +924,15 @@ end
 ------------------------------------------------------------------------------
 
 ---@class EntityBuilder
----@field _world World
----@field _entity IdEntity
----@field _components ComponentSet
+---@field _world Sardine.World
+---@field _entity Sardine.IdEntity
+---@field _components Sardine.ComponentSet
 local EntityBuilder = {}
 EntityBuilder.__index = {}
 
----@param world World
----@param entity IdEntity
----@param components ComponentSet?
+---@param world Sardine.World
+---@param entity Sardine.IdEntity
+---@param components Sardine.ComponentSet?
 ---@return EntityBuilder
 function EntityBuilder.new(world, entity, components)
     return setmetatable(
@@ -954,7 +942,7 @@ function EntityBuilder.new(world, entity, components)
 end
 
 ---@param self EntityBuilder
----@param id IdComponent
+---@param id Sardine.IdComponent
 ---@param component any
 ---@return EntityBuilder
 function EntityBuilder.attach(self, id, component)
@@ -963,7 +951,7 @@ function EntityBuilder.attach(self, id, component)
 end
 
 ---@param self EntityBuilder
----@param id IdComponent
+---@param id Sardine.IdComponent
 ---@param op fun(any)
 ---@return EntityBuilder
 function EntityBuilder.modify(self, id, op)
@@ -972,7 +960,7 @@ function EntityBuilder.modify(self, id, op)
 end
 
 ---@param self EntityBuilder
----@param id IdComponent
+---@param id Sardine.IdComponent
 ---@return EntityBuilder
 function EntityBuilder.detach(self, id)
     self._components[id] = nil
@@ -980,7 +968,7 @@ function EntityBuilder.detach(self, id)
 end
 
 ---@param self EntityBuilder
----@return IdEntity
+---@return Sardine.IdEntity
 function EntityBuilder.ud(self, id)
     return self._entity
 end
@@ -999,10 +987,10 @@ end
 --#region World
 ------------------------------------------------------------------------------
 
----@class World
+---@class Sardine.World
 ---@field _allocator EntityAllocator
----@field _storage ArchetypeStorage
----@field _archetypeLookup ComponentColumn
+---@field _storage Sardine.ArchetypeStorage
+---@field _archetypeLookup Sardine.ComponentColumn
 local World = {}
 World.__index = {}
 
@@ -1013,26 +1001,33 @@ function World.new()
     )
 end
 
----@param self World
----@param components ComponentSet?
+---@param self Sardine.World
+---@param components Sardine.ComponentSet?
 ---@return EntityBuilder
 function World.entityBuild(self, components)
     local id = self._allocator:alloc()
     return EntityBuilder.new(self, id, components)
 end
 
----@param self World
----@param components ComponentSet
----@return IdEntity
+---@param self Sardine.World
+---@param components Sardine.ComponentSet
+---@return Sardine.IdEntity
 function World.entitySpawn(self, components)
     local id = self._allocator:alloc()
     self:_initEntity(id, components)
     return id
 end
 
----@param self World
----@param entity IdEntity
----@param components ComponentSet
+---@param self Sardine.World
+---@param entityId Sardine.IdEntity
+function World.entityDestroy(self, entityId)
+    -- self._archetypeLookup:set(entityId, nil)
+    -- self._allocator:freeUnchecked(entityId)
+end
+
+---@param self Sardine.World
+---@param entity Sardine.IdEntity
+---@param components Sardine.ComponentSet
 function World._initEntity(self, entity, components)
     --TODO how do we want to handle empty entities
     -- if components ~= nil and next(components) ~= nil then
@@ -1043,16 +1038,16 @@ end
 
 function World.getComponent(self, entity, component)
     --TODO do we want to fail on bad entity and/or bad component lookup?
-    local archetype = self._archetypeLookup:get(entity) --[[@as IdArchetype?]]
+    local archetype = self._archetypeLookup:get(entity) --[[@as Sardine.IdArchetype?]]
     if archetype == nil then
         error("Entity does not exist")
     end
     return self._storage:getTableById(archetype):get(entity, component)
 end
 
----@param self World
----@param filter ComponentSetFilter
----@return Query
+---@param self Sardine.World
+---@param filter Sardine.ComponentSetFilter
+---@return Sardine.Query
 function World.query(self, filter)
     local _,id = self._storage:query(filter, nil)
     return Query.new(id)
