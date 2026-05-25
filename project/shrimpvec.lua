@@ -5,6 +5,9 @@
 --
 -- -- Changelog --
 --
+-- 2026-05-25
+-- - Add perpDot, signum, rotateByVec etc.
+--
 -- 2026-05-03
 -- - Add perp function
 -- - Add lt/gt functions
@@ -207,6 +210,15 @@ function Vec2.dot(v1, v2)
     return v1.x * v2.x + v1.y * v2.y
 end
 
+--- Calculates the perpendicular dot product of the two given vectors
+--- Sometimes refered to as the 2D scalar cross product.
+--- @param v1 Vec2 A vector in the dot product
+--- @param v2 Vec2 A vector in the dot product
+--- @return number _ The perpendicular dot product of the two given vectors
+function Vec2.perpDot(v1, v2)
+    return v1.x*v2.y - v1.y*v2.x
+end
+
 --- Calculates the unit normal of the given vector or returns 
 --- a zero-length vector if the given vector is zero-length
 --- @param v Vec2 The vector to calculate the unit normal of
@@ -258,6 +270,16 @@ end
 --- @return Vec2 _ The absolute vector 
 function Vec2.abs(v)
     return Vec2(math.abs(v.x), math.abs(v.y))
+end
+
+--- Calculates the signum of each component of the vector, equivelent of (signum(x), signum(y))
+--- @param v Vec2 The vector to calculate the signs of
+--- @return Vec2 _ The sign vector 
+function Vec2.signum(v)
+    return Vec2(
+        v.x == 0 and 0 or math.abs(v.x)/v.x,
+        v.y == 0 and 0 or math.abs(v.y)/v.y
+    )
 end
 
 --- Calculates the component-wise floor of the vector
@@ -323,16 +345,33 @@ end
 --- @param v Vec2 The vector to rotate
 --- @param angle number The radians to rotate by
 --- @return Vec2 _ The rotated vector
-function Vec2.rotateBy(v, angle)
+function Vec2.rotatedByAngle(v, angle)
+    return v:rotatedByVec(Vec2.newRotation(angle))
+end
+
+--- Creates a vector that stores a rotation (cos, sin)
+--- for faster transformation
+--- @param angle number The radians to rotate by
+--- @return Vec2
+function Vec2.newRotation(angle)
     local cos = math.cos(angle)
     local sin = math.sin(angle)
+    return Vec2(cos, sin)
+end
+
+--- Rotates the given vector by the rotation vector
+--- encoded as (c, s), see `Vec2.newRotation`
+--- @param v Vec2 The vector to rotate
+--- @param angle Vec2 The vector containing the rotation transformation
+--- @return Vec2 _ The rotated vector
+function Vec2.rotatedByVec(v, angle)
     return Vec2(
-        v.x * cos - v.y * sin, 
-        v.x * sin + v.y * cos
+        v.x * angle.x - v.y * angle.y,
+        v.x * angle.y + v.y * angle.x
     )
 end
 
---- Rotates the given vector by 90 degrees CCW
+--- Rotates the given vector by 90 degrees CW
 --- @param v Vec2 The vector to rotate
 --- @return Vec2 _ The rotated vector
 function Vec2.perp(v)
