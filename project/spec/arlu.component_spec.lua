@@ -14,11 +14,11 @@ end
 describe("ComponentStorage", function()
 
     insulateIt("Allocate components UIDs", function()
-        local sardine = require("sardine")
+        local arlu = require("arlu")
 
-        local compA = sardine.IdComponent.register("compA")
-        local compB = sardine.IdComponent.register("compB")
-        local compC = sardine.IdComponent.register("compC")
+        local compA = arlu.CId.register("compA")
+        local compB = arlu.CId.register("compB")
+        local compC = arlu.CId.register("compC")
         
         assert.are_not_equal(compA, compB, compC)
         assert.are_equal(compA, 1)
@@ -27,11 +27,11 @@ describe("ComponentStorage", function()
     end)
 
     insulateIt("Allocate components UIDs, ensure insulation", function()
-        local sardine = require("sardine")
+        local arlu = require("arlu")
 
-        local compA = sardine.IdComponent.register("compAA")
-        local compB = sardine.IdComponent.register("compBB")
-        local compC = sardine.IdComponent.register("compCC")
+        local compA = arlu.CId.register("compAA")
+        local compB = arlu.CId.register("compBB")
+        local compC = arlu.CId.register("compCC")
         
         assert.are_not_equal(compA, compB, compC)
         assert.are_equal(compA, 1)

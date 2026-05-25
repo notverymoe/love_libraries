@@ -4,7 +4,7 @@ Welcome to Natalie's Love2D Library Repository. You can find libraries I've eith
 
 | Library    | Description   |
 |------------|---------------|
-| Sardine    | A simple archetype-based ECS from scratch |
+| ArLu       | A simple archetype-based ECS and scheduling system from scratch - **Ar**chetype**Lu**a |
 | ShripVec   | Vec2D Library (ffi/no-ffi), forked from [Brinevec](https://github.com/novemberisms/brinevector) |
 | TimerFixed | Simple timer library for implementing a fixed accumulator-based timestep |
 | XML        | LuaLS Typed & Relocatable version of [xml2lua's](https://github.com/manoelcampos/xml2lua) DOM XML parser |

@@ -1,6 +1,6 @@
 -- Copyright 2026 Natalie Baker -- MIT --
 
-local sardine = require("sardine")
+local arlu = require("arlu")
 
 ---@class luassert
 ---@field message fun(string): luassert.internal
@@ -8,7 +8,7 @@ local sardine = require("sardine")
 describe("Schedule", function()
 
     local function createOrderSystem(name, index, updateCount)
-        return sardine.System.new(name, function()
+        return arlu.System.new(name, function()
             local count = updateCount()
             assert.message("System expects be run "..name).equal(index, count)
         end)
@@ -25,7 +25,7 @@ describe("Schedule", function()
         local sysB = createOrderSystem("second", 2, updateCounter)
         local sysC = createOrderSystem("third",  3, updateCounter)
 
-        local builder = sardine.ScheduleBuilder.new("Test Schedule")
+        local builder = arlu.ScheduleBuilder.new("Test Schedule")
             :add(sysA) -- Must be in-order because we have no dep working
             :add(sysB)
             :add(sysC)
@@ -49,7 +49,7 @@ describe("Schedule", function()
         local sysAA  = createOrderSystem("second", 2, updateCounter):after(sysA )
         local sysAAA = createOrderSystem("third",  3, updateCounter):after(sysAA)
 
-        local builder = sardine.ScheduleBuilder.new("Test Schedule")
+        local builder = arlu.ScheduleBuilder.new("Test Schedule")
             :add(sysAAA) -- Out of order to ensure dep ordering being tested
             :add(sysA  )
             :add(sysAA )
@@ -80,7 +80,7 @@ describe("Schedule", function()
             local sysBA = createOrderSystem("fifth", 5, updateCounter):after(sysB)
             local sysBB = createOrderSystem("sixth", 6, updateCounter):after(sysB)
 
-        local builder = sardine.ScheduleBuilder.new("Test Schedule")
+        local builder = arlu.ScheduleBuilder.new("Test Schedule")
             :add(sysA)
                 :add(sysAA)
                     :add(sysAAA)

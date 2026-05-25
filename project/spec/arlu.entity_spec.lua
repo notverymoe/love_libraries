@@ -1,13 +1,13 @@
 -- Copyright 2026 Natalie Baker -- MIT --
 
-local sardine = require("sardine")
+local arlu = require("arlu")
 
 ---@class luassert
 ---@field message fun(string): luassert.internal
 
 describe("EntityAllocator", function()
     it("should allocate in a sequence", function()
-        local alloc = sardine.EntityAllocator.new()
+        local alloc = arlu.EntityAllocator.new()
 
         local gid = alloc:alloc()
         assert.message("Allocator should start with index 1").equal(1, gid.index)
@@ -28,7 +28,7 @@ describe("EntityAllocator", function()
     end)
 
     it("should reuse freed indexes", function()
-        local alloc = sardine.EntityAllocator.new()
+        local alloc = arlu.EntityAllocator.new()
 
         local gid1 = alloc:alloc()
         local gid2 = alloc:alloc()
@@ -53,7 +53,7 @@ describe("EntityAllocator", function()
 
     --TODO need a checked free
 -- it("should not free already freed indexes", function()
---     local alloc = sardine.EntityAllocator.new()
+--     local alloc = arlu.EntityAllocator.new()
 
 --     local gid = alloc:alloc()
 --     alloc:freeUnchecked(gid)
@@ -68,21 +68,21 @@ end)
 describe("ComponentColumn", function()
 
     it("can store and retrieve entity data", function()
-        local alloc = sardine.EntityAllocator.new()
+        local alloc = arlu.EntityAllocator.new()
         local entityA = alloc:alloc()
-        local storage = sardine.ComponentColumn.new()
+        local storage = arlu.ComponentColumn.new()
         storage:set(entityA, 126)
         assert.are.equal(126, storage:get(entityA))
     end)
 
     it("should have a predictable order", function()
-        local alloc = sardine.EntityAllocator.new()
+        local alloc = arlu.EntityAllocator.new()
 
         local entityA = alloc:alloc()
         local entityB = alloc:alloc()
         local entityC = alloc:alloc()
 
-        local storage = sardine.ComponentColumn.new()
+        local storage = arlu.ComponentColumn.new()
         storage:set(entityC, 1) -- Non-consecutive entity indicies
         storage:set(entityA, 2)
         storage:set(entityB, 3)
@@ -108,13 +108,13 @@ describe("ComponentColumn", function()
     end)
 
     it("should have a predictable order, after delete", function()
-        local alloc = sardine.EntityAllocator.new()
+        local alloc = arlu.EntityAllocator.new()
 
         local entityA = alloc:alloc()
         local entityB = alloc:alloc()
         local entityC = alloc:alloc()
 
-        local storage = sardine.ComponentColumn.new()
+        local storage = arlu.ComponentColumn.new()
         storage:set(entityC, 1) -- Non-consecutive entity indicies
         storage:set(entityA, 2)
         storage:set(entityB, 3)
@@ -139,14 +139,14 @@ describe("ComponentColumn", function()
     end)
 
     it("should have a predictable order, after delete, and re-insert", function()
-        local alloc = sardine.EntityAllocator.new()
+        local alloc = arlu.EntityAllocator.new()
 
         local entityA = alloc:alloc()
         local entityB = alloc:alloc()
         local entityC = alloc:alloc()
         local entityD = alloc:alloc()
 
-        local storage = sardine.ComponentColumn.new()
+        local storage = arlu.ComponentColumn.new()
         storage:set(entityC, 1) -- Non-consecutive entity indicies
         storage:set(entityA, 2)
         storage:set(entityB, 3)
@@ -179,14 +179,14 @@ describe("ComponentColumn", function()
     end)
 
     it("should have a predictable order, after delete, and new insert", function()
-        local alloc = sardine.EntityAllocator.new()
+        local alloc = arlu.EntityAllocator.new()
 
         local entityA = alloc:alloc()
         local entityB = alloc:alloc()
         local entityC = alloc:alloc()
         local entityD = alloc:alloc()
 
-        local storage = sardine.ComponentColumn.new()
+        local storage = arlu.ComponentColumn.new()
         storage:set(entityC, 1) -- Non-consecutive entity indicies
         storage:set(entityA, 2)
         storage:set(entityB, 3)
