@@ -65,14 +65,14 @@ describe("EntityAllocator", function()
 
 end)
 
-describe("ComponentColumn", function()
+describe("ComponentTable", function()
 
     it("can store and retrieve entity data", function()
         local alloc = arlu.EntityAllocator.new()
         local entityA = alloc:alloc()
-        local storage = arlu.ComponentColumn.new()
-        storage:set(entityA, 126)
-        assert.are.equal(126, storage:get(entityA))
+        local storage = arlu.ComponentTable.new({1})
+        storage:set(entityA, {126})
+        assert.are.equal(126, storage:get(entityA)[1])
     end)
 
     it("should have a predictable order", function()
@@ -82,14 +82,14 @@ describe("ComponentColumn", function()
         local entityB = alloc:alloc()
         local entityC = alloc:alloc()
 
-        local storage = arlu.ComponentColumn.new()
-        storage:set(entityC, 1) -- Non-consecutive entity indicies
-        storage:set(entityA, 2)
-        storage:set(entityB, 3)
+        local storage = arlu.ComponentTable.new({1})
+        storage:set(entityC, {1}) -- Non-consecutive entity indicies
+        storage:set(entityA, {2})
+        storage:set(entityB, {3})
 
         local iters = {}
-        for entity, component in storage:iter() do
-            table.insert(iters, {entity = entity.index, value = component})
+        for entity, components in storage:iter() do
+            table.insert(iters, {entity = entity.index, value = components[1]})
         end
 
         assert.are.same(
@@ -100,9 +100,9 @@ describe("ComponentColumn", function()
             },
             iters,
             {
-                {entity = entityC.index, value = storage:get(entityC)},
-                {entity = entityA.index, value = storage:get(entityA)},
-                {entity = entityB.index, value = storage:get(entityB)},
+                {entity = entityC.index, value = storage:get(entityC)[1]},
+                {entity = entityA.index, value = storage:get(entityA)[1]},
+                {entity = entityB.index, value = storage:get(entityB)[1]},
             }
         )
     end)
@@ -114,15 +114,15 @@ describe("ComponentColumn", function()
         local entityB = alloc:alloc()
         local entityC = alloc:alloc()
 
-        local storage = arlu.ComponentColumn.new()
-        storage:set(entityC, 1) -- Non-consecutive entity indicies
-        storage:set(entityA, 2)
-        storage:set(entityB, 3)
+        local storage = arlu.ComponentTable.new({1})
+        storage:set(entityC, {1}) -- Non-consecutive entity indicies
+        storage:set(entityA, {2})
+        storage:set(entityB, {3})
         storage:set(entityA, nil)
 
         local iters = {}
-        for entity, component in storage:iter() do
-            table.insert(iters, {entity = entity.index, value = component})
+        for entity, components in storage:iter() do
+            table.insert(iters, {entity = entity.index, value = components[1]})
         end
 
         assert.are.same(
@@ -132,8 +132,8 @@ describe("ComponentColumn", function()
             },
             iters,
             {
-                {entity = entityC.index, value = storage:get(entityC)},
-                {entity = entityB.index, value = storage:get(entityB)},
+                {entity = entityC.index, value = storage:get(entityC)[1]},
+                {entity = entityB.index, value = storage:get(entityB)[1]},
             }
         )
     end)
@@ -146,19 +146,19 @@ describe("ComponentColumn", function()
         local entityC = alloc:alloc()
         local entityD = alloc:alloc()
 
-        local storage = arlu.ComponentColumn.new()
-        storage:set(entityC, 1) -- Non-consecutive entity indicies
-        storage:set(entityA, 2)
-        storage:set(entityB, 3)
-        storage:set(entityD, 4)
+        local storage = arlu.ComponentTable.new({1})
+        storage:set(entityC, {1}) -- Non-consecutive entity indicies
+        storage:set(entityA, {2})
+        storage:set(entityB, {3})
+        storage:set(entityD, {4})
 
         -- Remove & Add
         storage:set(entityA, nil)
-        storage:set(entityA, 5)
+        storage:set(entityA, {5})
 
         local iters = {}
-        for entity, component in storage:iter() do
-            table.insert(iters, {entity = entity.index, value = component})
+        for entity, components in storage:iter() do
+            table.insert(iters, {entity = entity.index, value = components[1]})
         end
 
         assert.are.same(
@@ -170,10 +170,10 @@ describe("ComponentColumn", function()
             },
             iters,
             {
-                {entity = entityC.index, value = storage:get(entityC)},
-                {entity = entityD.index, value = storage:get(entityD)},
-                {entity = entityB.index, value = storage:get(entityB)},
-                {entity = entityA.index, value = storage:get(entityA)},
+                {entity = entityC.index, value = storage:get(entityC)[1]},
+                {entity = entityD.index, value = storage:get(entityD)[1]},
+                {entity = entityB.index, value = storage:get(entityB)[1]},
+                {entity = entityA.index, value = storage:get(entityA)[1]},
             }
         )
     end)
@@ -186,18 +186,18 @@ describe("ComponentColumn", function()
         local entityC = alloc:alloc()
         local entityD = alloc:alloc()
 
-        local storage = arlu.ComponentColumn.new()
-        storage:set(entityC, 1) -- Non-consecutive entity indicies
-        storage:set(entityA, 2)
-        storage:set(entityB, 3)
+        local storage = arlu.ComponentTable.new({1})
+        storage:set(entityC, {1}) -- Non-consecutive entity indicies
+        storage:set(entityA, {2})
+        storage:set(entityB, {3})
 
         -- Remove & Add
         storage:set(entityA, nil)
-        storage:set(entityD, 4)
+        storage:set(entityD, {4})
 
         local iters = {}
-        for entity, component in storage:iter() do
-            table.insert(iters, {entity = entity.index, value = component})
+        for entity, components in storage:iter() do
+            table.insert(iters, {entity = entity.index, value = components[1]})
         end
 
         assert.are.same(
@@ -208,9 +208,9 @@ describe("ComponentColumn", function()
             },
             iters,
             {
-                {entity = entityC.index, value = storage:get(entityC)},
-                {entity = entityB.index, value = storage:get(entityB)},
-                {entity = entityD.index, value = storage:get(entityD)},
+                {entity = entityC.index, value = storage:get(entityC)[1]},
+                {entity = entityB.index, value = storage:get(entityB)[1]},
+                {entity = entityD.index, value = storage:get(entityD)[1]},
             }
         )
     end)

@@ -9,6 +9,7 @@
 --#region EId
 -------------------------------------------------------------------------------
 
+---EntityId
 ---@class arlu.EId
 ---@field index integer
 ---@field generation integer
@@ -132,6 +133,7 @@ end
 --#region ComponentId
 ------------------------------------------------------------------------------
 
+---ComponentId
 ---@class arlu.CId
 
 ---@class arlu.ModuleCId
@@ -202,34 +204,45 @@ end
 ------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
---#region ComponentColumn
+--#region ComponentTable
 -------------------------------------------------------------------------------
 
----@class arlu.ComponentColumn
----@field count integer
+---@class arlu.ComponentTable
+---@field _count integer
 ---@field _slots arlu.EId[]
----@field data any[]
+---@field _data table<arlu.CId, any[]>
 ---@field _back integer[]
-local ComponentColumn = {}
-ComponentColumn.__index = ComponentColumn
+local ComponentTable = {}
+ComponentTable.__index = ComponentTable
 
 ---Creates a new storage for EntityId-associated data
----@return arlu.ComponentColumn
-function ComponentColumn.new()
+---@param columns arlu.ComponentSet
+---@return arlu.ComponentTable
+function ComponentTable.new(columns)
+    local data = {}
+    for cid,_ in pairs(columns) do
+        data[cid] = {}
+    end
+
     return setmetatable(
-        {count = 0, data = {}, _slots = {}, _back = {}},
-        ComponentColumn
-    ) --[[@as arlu.ComponentColumn]]
+        {
+            _count   = 0,
+            _data    = data,
+            _back    = {},
+            _slots   = {},
+        } --[[@as arlu.ComponentTable]],
+        ComponentTable
+    )
 end
 
----@param self arlu.ComponentColumn
+---@param self arlu.ComponentTable
 ---@param eId arlu.EId
----@param value any
+---@param values table<arlu.CId, any> | nil
 ---@param force boolean?
----@return any
-function ComponentColumn.set(self, eId, value, force)
+---@return table<arlu.CId, any> | nil
+function ComponentTable.set(self, eId, values, force)
     local existing = self:_getSlot(eId)
-    if value == nil then
+    if values == nil then
         if (not force) and (existing.generation ~= eId.generation) then
             error("Entity ID generation mismatch.")
         end
@@ -238,38 +251,49 @@ function ComponentColumn.set(self, eId, value, force)
         if (not force) and (existing.generation ~= eId.generation) then
             error("Slot already contains a different generation, cannot reuse unless forced or removed first.")
         end
-        return self:_set(eId, value, existing)
+        return self:_set(eId, values, existing)
     else
         if (not force) and (existing.generation > eId.generation) then
             error("Slot previously used for a newer generation, cannot add older generation unless forced.")
         end
-        return self:_add(eId, value)
+        return self:_add(eId, values)
     end
 end
 
 ---@param eId arlu.EId
----@return any
-function ComponentColumn.get(self, eId)
-    self.count = self.count + 1
+---@return table<arlu.CId, any> | nil
+function ComponentTable.get(self, eId)
+    self._count = self._count + 1
     local slot = self:_getSlot(eId)
-    if (slot.index      <=                   0) then return nil end
+    if (slot.index      <=              0) then return nil end
     if (slot.generation ~= eId.generation) then return nil end
-    return self.data[slot.index]
+    return self:getSlotDataAll(slot.index)
+end
+
+---@param cId arlu.CId
+---@param eId arlu.EId
+---@return any | nil
+function ComponentTable.getComponent(self, cId, eId)
+    self._count = self._count + 1
+    local slot = self:_getSlot(eId)
+    if (slot.index      <=              0) then return nil end
+    if (slot.generation ~= eId.generation) then return nil end
+    return self:getSlotData(cId, slot.index)
 end
 
 ---@param eId arlu.EId
 ---@param init fun(): any
 ---@param force boolean?
 ---@return any
-function ComponentColumn.getOrSet(self, eId, init, force)
+function ComponentTable.getOrSet(self, eId, init, force)
     return self:get(eId) or self:set(eId, init(), force)
 end
 
 ---Gets the data in the given slot index
 ---@param slotIdx integer
 ---@return arlu.EId
-function ComponentColumn.getEntityIdForSlot(self, slotIdx)
-    if slotIdx > self.count then
+function ComponentTable.getEntityIdForSlot(self, slotIdx)
+    if slotIdx > self._count then
         error("Attempt to index out of bounds, slot idx not allocated")
     end
     local back = self._back[slotIdx]
@@ -278,22 +302,58 @@ end
 
 ---Gets the data in the given slot index
 ---@param slotIdx integer
----@return any
-function ComponentColumn.getSlotData(self, slotIdx)
-    if slotIdx > self.count then
+---@return table<arlu.CId, any>
+function ComponentTable.getSlotDataAll(self, slotIdx)
+    if slotIdx > self._count then
         error("Attempt to index out of bounds, slot idx not allocated")
     end
-    return self.data[slotIdx]
+    local slotData = {}
+    for cid,data in pairs(self._data) do
+        slotData[cid] = data[slotIdx]
+    end
+    return slotData
 end
 
----@param self arlu.ComponentColumn
----@return fun(state: arlu.ComponentColumn, key: arlu.EId): (arlu.EId, any), arlu.ComponentColumn, any
-function ComponentColumn.iter(self)
-    local next, t, _ = pairs(self.data)
+---Gets the data in the given slot index
+---@param cId arlu.CId
+---@param slotIdx integer
+---@return any
+function ComponentTable.getSlotData(self, cId, slotIdx)
+    if slotIdx > self._count then
+        error("Attempt to index out of bounds, slot idx not allocated")
+    end
+    local data = self._data[cId]
+    return data ~= nil and data[slotIdx]
+end
+
+---@param self arlu.ComponentTable
+---@return fun(state: arlu.ComponentTable, key: arlu.EId): (arlu.EId, table<arlu.CId, any>), arlu.ComponentTable, any
+function ComponentTable.iter(self)
+    local slotIdx = 0
     return function(self, p)
-        local k, v = next(t, p and self._slots[p.index].index)
-        return k and self._slots[self._back[k]]:withId(self._back[k]), k and v
+        if slotIdx >= self._count then
+            ---Iter needs to return nil
+            ---@diagnostic disable-next-line: return-type-mismatch
+            return nil, nil
+        else
+            slotIdx = slotIdx + 1
+            local k = self:getEntityIdForSlot(slotIdx)
+            local v = self:getSlotDataAll(slotIdx)
+            return k, v
+        end
     end, self, nil
+end
+
+---@param self arlu.ComponentTable
+---@return integer
+function ComponentTable.count(self)
+    return self._count
+end
+
+---@param self arlu.ComponentTable
+---@return arlu.ComponentSet
+function ComponentTable.columns(self)
+    return self._data
 end
 
 -----------------------------
@@ -301,54 +361,65 @@ end
 -----------------------------
 
 ---@param eId arlu.EId
----@param value any
----@return any
-function ComponentColumn._add(self, eId, value)
-    self.count = self.count + 1
-    self._slots[eId.index] = EId.new(self.count, eId.generation)
-    self._back[self.count] = eId.index
-    self.data[self.count] = value
-    return value
+---@param values table<arlu.CId, any>
+---@return table<arlu.CId, any>
+function ComponentTable._add(self, eId, values)
+    self._count = self._count + 1
+    self._slots[eId.index] = EId.new(self._count, eId.generation)
+    self._back[self._count] = eId.index
+    for cid,data in pairs(self._data) do
+        data[self._count] = values[cid]
+    end
+    return values
 end
 
 ---@param eId arlu.EId The identifier to update the value of
----@param value any The new value to associate
+---@param values table<arlu.CId, any>
 ---@param slot arlu.EId
----@return any
-function ComponentColumn._set(self, eId, value, slot)
+---@return table<arlu.CId, any>
+function ComponentTable._set(self, eId, values, slot)
     slot.generation = eId.generation
-    self.data[slot.index] = value
-    return value
+    for cid,data in pairs(self._data) do
+        data[slot.index] = values[cid]
+    end
+    return values
 end
 
----@param self arlu.ComponentColumn
+---@param self arlu.ComponentTable
 ---@param slot arlu.EId
----@return any
-function ComponentColumn._remove(self, slot)
+---@return table<arlu.CId, any> | nil
+function ComponentTable._remove(self, slot)
     -- Check if it's already removed, no-op
     if (slot.index <= 0) then
         return nil
     end
 
     -- Move slot to end of data
-    local slotValue = self.data[slot.index]
-    if slot.index ~= self.count then
-        local endIndex = self._back[self.count]
-        self._slots[endIndex].index = slot.index      -- point end slot to vacated data index
-        self._back[slot.index]      = endIndex        -- point back ref to vacated slot index
-        self.data[slot.index] = self.data[self.count] -- move data into slot
+    local slotValue = self:getSlotDataAll(slot.index)
+    if slot.index ~= self._count then
+        local endIndex = self._back[self._count]
+        self._slots[endIndex].index = slot.index -- point end slot to vacated data index
+        self._back[slot.index]      = endIndex   -- point back ref to vacated slot index
+        for _,data in pairs(self._data) do
+            data[slot.index] = data[self._count]  -- move data into slot
+        end
         -- The original back ref can dangle, it's fine
     end
 
     -- Dealloc last slot
     slot.index = 0
-    self.data[self.count] = nil
-    self.count = self.count - 1
+    for _,data in pairs(self._data) do
+        data[self._count] = nil
+    end
+    self._count = self._count - 1
 
     return slotValue
 end
 
-function ComponentColumn._getSlot(self, eId)
+---@param self arlu.ComponentTable
+---@param eId arlu.EId
+---@return arlu.EId
+function ComponentTable._getSlot(self, eId)
     return self._slots[eId.index] or EId.new(0,0)
 end
 
@@ -357,7 +428,7 @@ end
 -----------------------------
 
 -------------------------------------------------------------------------------
---#endregion ComponentColumn
+--#endregion ComponentTable
 -------------------------------------------------------------------------------
 
 --===========================================================================--
@@ -376,6 +447,20 @@ end
 
 ---@class ModuleComponentSet
 local ComponentSet = {}
+
+---@param ... arlu.CId
+---@return arlu.ComponentSet
+function ComponentSet.from(...)
+    return ComponentSet.fromArray({...})
+end
+
+---@param a arlu.CId[]
+---@return arlu.ComponentSet
+function ComponentSet.fromArray(a)
+    local set = {}
+    for _,k in ipairs(a) do set[k] = k end
+    return set
+end
 
 --- Checks if all components listed in `a` exist in `b`
 ---@param a arlu.ComponentSet
@@ -605,96 +690,11 @@ end
 --#region Archetypes
 --===========================================================================--
 
----@class arlu.IdArchetype
+---ArchetypeId
+---@class arlu.AId 
 
----@class arlu.IdQuery
-
-------------------------------------------------------------------------------
---#region ArchetypeTable
-------------------------------------------------------------------------------
-
----@class arlu.ArchetypeTable
----@field components arlu.ComponentSet
----@field columns table<arlu.CId, arlu.ComponentColumn>
-local ArchetypeTable = {}
-ArchetypeTable.__index = ArchetypeTable
-
---TODO flatten ComponentColumn into ArchetypeTable to remove redundant lookups and back tables
-
----@param components arlu.ComponentSet
----@return arlu.ArchetypeTable
-function ArchetypeTable.new(components)
-    local columns = {}
-    for id,_ in pairs(components) do
-        columns[id] = ComponentColumn.new()
-    end
-    return setmetatable(
-        { components=components, columns=columns, },
-        ArchetypeTable
-    )
-end
-
----@param self arlu.ArchetypeTable
----@param entity arlu.EId
----@param components arlu.ComponentSet
-function ArchetypeTable.insert(self, entity, components)
-    if not ComponentSet.exact(self.components, components) then
-        error("Inserted components do not match archetype columns")
-    end
-    for id,component in pairs(components) do
-        self.columns[id]:set(entity, component)
-    end
-end
-
----@param self arlu.ArchetypeTable
----@param entity arlu.EId
----@param component arlu.CId
----@return any
-function ArchetypeTable.get(self, entity, component)
-    return self.columns[component]:get(entity)
-end
-
----@param self arlu.ArchetypeTable
----@param entitySlot integer
----@param component arlu.CId
----@return any
-function ArchetypeTable.getSlotData(self, entitySlot, component)
-    return self.columns[component]:getSlotData(entitySlot)
-end
-
----@param self arlu.ArchetypeTable
----@param entitySlot integer
----@return any
-function ArchetypeTable.getEntityIdForSlot(self, entitySlot)
-    return self:_firstColumn():getEntityIdForSlot(entitySlot)
-end
-
----@param self arlu.ArchetypeTable
----@return arlu.ComponentColumn
-function ArchetypeTable._firstColumn(self)
-    return select(2, next(self.columns))
-end
-
----@param self arlu.ArchetypeTable
----@return integer
-function ArchetypeTable.count(self)
-    return self:_firstColumn().count
-end
-
----@param self arlu.ArchetypeTable
----@param entity arlu.EId
----@return arlu.ComponentSet
-function ArchetypeTable.remove(self, entity)
-    local components = {}
-    for id,_ in pairs(self.components) do
-        components[id] = self.columns[id]:set(entity, nil)
-    end
-    return components
-end
-
-------------------------------------------------------------------------------
---#endregion ArchetypeTable
-------------------------------------------------------------------------------
+---QueryId
+---@class arlu.QId 
 
 ------------------------------------------------------------------------------
 --#region ArchetypeStorage
@@ -709,36 +709,36 @@ ArchetypeStorage.__index = ArchetypeStorage
 ---@return arlu.ArchetypeStorage
 function ArchetypeStorage.new()
     return setmetatable({
-        _archetypes=ComponentSetStorage.new(),
-        _queries=ComponentSetStorage.new()
+        _archetypes = ComponentSetStorage.new(),
+        _queries    = ComponentSetStorage.new()
     }, ArchetypeStorage)
 end
 
 ---@param self arlu.ArchetypeStorage
----@param id arlu.IdArchetype
----@return arlu.ArchetypeTable
+---@param id arlu.AId
+---@return arlu.ComponentTable
 function ArchetypeStorage.getTableById(self, id)
-    return self._archetypes:getByIdx(id --[[@as integer]]) --[[@as arlu.ArchetypeTable]]
+    return self._archetypes:getByIdx(id --[[@as integer]]) --[[@as arlu.ComponentTable]]
 end
 
 ---@param self arlu.ArchetypeStorage
 ---@param components arlu.ComponentSet
----@return arlu.ArchetypeTable
----@return arlu.IdArchetype
+---@return arlu.ComponentTable
+---@return arlu.AId
 function ArchetypeStorage.getTable(self, components)
     local idx = self._archetypes:indexOf(components)
-    return idx and self._archetypes:getByIdx(idx) --[[@as arlu.ArchetypeTable]], idx --[[@as arlu.IdArchetype]]
+    return idx and self._archetypes:getByIdx(idx) --[[@as arlu.ComponentTable]], idx --[[@as arlu.AId]]
 end
 
 ---@param self arlu.ArchetypeStorage
 ---@param components arlu.ComponentSet
----@return arlu.ArchetypeTable
----@return arlu.IdArchetype
+---@return arlu.ComponentTable
+---@return arlu.AId
 function ArchetypeStorage.getOrCreateTable(self, components)
     local existing, idx = self:getTable(components)
     if existing == nil then
-        existing = ArchetypeTable.new(components)
-        idx = self._archetypes:insert(components, existing) --[[@as arlu.IdArchetype]]
+        existing = ComponentTable.new(components)
+        idx = self._archetypes:insert(components, existing) --[[@as arlu.AId]]
         for _,data in pairs(self._queries:query(components)) do
             table.insert(data, idx)
         end
@@ -749,15 +749,15 @@ end
 ---Run a query (cached) over all archetype component sets
 ---@param self arlu.ArchetypeStorage
 ---@param filter any The filter to run over the archetype component sets
----@param idCache arlu.IdQuery? The cache index for the filter, faster if provided
----@return arlu.IdArchetype[] archetypes List of archetype ids that match the filter
----@return arlu.IdQuery idCache The cache index associated with the given filter
+---@param idCache arlu.QId? The cache index for the filter, faster if provided
+---@return arlu.AId[] archetypes List of archetype ids that match the filter
+---@return arlu.QId idCache The cache index associated with the given filter
 function ArchetypeStorage.query(self, filter, idCache)
     if idCache == nil then
-        idCache = self._queries:indexOf(filter) --[[@as arlu.IdQuery?]]
+        idCache = self._queries:indexOf(filter) --[[@as arlu.QId?]]
     end
     if idCache == nil then
-        idCache = self._queries:insert(filter, self:queryRaw(filter)) --[[@as arlu.IdQuery]]
+        idCache = self._queries:insert(filter, self:queryRaw(filter)) --[[@as arlu.QId]]
     end
     return self._queries:getByIdx(idCache --[[@as integer]]), idCache
 end
@@ -765,12 +765,12 @@ end
 ---Run a query (uncached) over all archetype component sets
 ---@param self arlu.ArchetypeStorage
 ---@param filter arlu.ComponentSetFilter
----@return arlu.IdArchetype[]
+---@return arlu.AId[]
 function ArchetypeStorage.queryRaw(self, filter)
     local results = {}
     for idx,data in pairs(self._archetypes:query(ComponentSetFilter.includes(filter))) do
-        local archetypeTable = data --[[@as arlu.ArchetypeTable]]
-        if not ComponentSet.any(ComponentSetFilter.excludes(filter), archetypeTable.components) then
+        local components = data --[[@as arlu.ComponentTable]]
+        if not ComponentSet.any(ComponentSetFilter.excludes(filter), components:columns()) then
             table.insert(results, idx)
         end
     end
@@ -794,17 +794,20 @@ end
 ------------------------------------------------------------------------------
 
 ---@class arlu.QueryEntity
----@field _archetype arlu.ArchetypeTable
+---@field _archetype arlu.ComponentTable
 ---@field _entityRaw integer
 local QueryEntity = {}
 QueryEntity.__index = QueryEntity
 
-function QueryEntity._new(archetype, entity)
-    return setmetatable({_archetype=archetype, _entityRaw=entity}, QueryEntity)
+---@param archetype arlu.ComponentTable?
+---@param entityRaw integer?
+---@return arlu.QueryEntity
+function QueryEntity._new(archetype, entityRaw)
+    return setmetatable({_archetype=archetype, _entityRaw=entityRaw}, QueryEntity)
 end
 
 ---@param self arlu.QueryEntity
----@param archetype arlu.ArchetypeTable
+---@param archetype arlu.ComponentTable
 ---@param entitySlot integer
 ---@return arlu.QueryEntity
 function QueryEntity._reset(self, archetype, entitySlot)
@@ -813,12 +816,23 @@ function QueryEntity._reset(self, archetype, entitySlot)
     return self
 end
 
+---@param self arlu.QueryEntity
+---@return arlu.EId
 function QueryEntity.id(self)
     return self._archetype:getEntityIdForSlot(self._entityRaw)
 end
 
+---@param self arlu.QueryEntity
+---@param id arlu.CId
+---@return any
 function QueryEntity.component(self, id)
-    return self._archetype:getSlotData(self._entityRaw, id)
+    return self._archetype:getSlotData(id, self._entityRaw)
+end
+
+---@param self arlu.QueryEntity
+---@return arlu.ComponentSet
+function QueryEntity.components(self)
+    return self._archetype:getSlotDataAll(self._entityRaw)
 end
 
 ------------------------------------------------------------------------------
@@ -830,7 +844,7 @@ end
 ------------------------------------------------------------------------------
 
 ---@class arlu.Query
----@field _id arlu.IdQuery
+---@field _id arlu.QId
 local Query = {}
 Query.__index = Query
 
@@ -854,11 +868,11 @@ function Query.collect(self, world)
 end
 
 ---@class arlu.QueryIterState
----@field archetypes arlu.IdArchetype[]
+---@field archetypes arlu.AId[]
 ---@field storage arlu.ArchetypeStorage
 
 ---@class arlu.QueryIterKey
----@field aCur arlu.ArchetypeTable
+---@field aCur arlu.ComponentTable
 ---@field aIdx integer
 ---@field eIdx integer
 ---@field eQur arlu.QueryEntity
@@ -908,7 +922,7 @@ end
 ------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------
---#region Query
+--#region SystemQuery
 ------------------------------------------------------------------------------
 
 ---Creates a system setup function that initializes
@@ -927,71 +941,7 @@ function SystemQuery(name, includes, excludes)
 end
 
 ------------------------------------------------------------------------------
---#endregion Query
-------------------------------------------------------------------------------
-
-------------------------------------------------------------------------------
---#region EntityBuilder
-------------------------------------------------------------------------------
-
----@class EntityBuilder
----@field _world arlu.World
----@field _entity arlu.EId
----@field _components arlu.ComponentSet
-local EntityBuilder = {}
-EntityBuilder.__index = {}
-
----@param world arlu.World
----@param entity arlu.EId
----@param components arlu.ComponentSet?
----@return EntityBuilder
-function EntityBuilder.new(world, entity, components)
-    return setmetatable(
-        {_world=world, _entity=entity, _components=(components or {})},
-        EntityBuilder
-    )
-end
-
----@param self EntityBuilder
----@param id arlu.CId
----@param component any
----@return EntityBuilder
-function EntityBuilder.attach(self, id, component)
-    self._components[id] = component
-    return self
-end
-
----@param self EntityBuilder
----@param id arlu.CId
----@param op fun(any)
----@return EntityBuilder
-function EntityBuilder.modify(self, id, op)
-    op(self._components[id])
-    return self
-end
-
----@param self EntityBuilder
----@param id arlu.CId
----@return EntityBuilder
-function EntityBuilder.detach(self, id)
-    self._components[id] = nil
-    return self
-end
-
----@param self EntityBuilder
----@return arlu.EId
-function EntityBuilder.ud(self, id)
-    return self._entity
-end
-
----@param self EntityBuilder
-function EntityBuilder.spawn(self)
-    self._world:_initEntity(self._entity, self._components)
-    return self._entity
-end
-
-------------------------------------------------------------------------------
---#endregion EntityBuilder
+--#endregion SystemQuery
 ------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------
@@ -1001,59 +951,98 @@ end
 ---@class arlu.World
 ---@field _allocator EntityAllocator
 ---@field _storage arlu.ArchetypeStorage
----@field _archetypeLookup arlu.ComponentColumn
+---@field _archetypeLookup arlu.ComponentTable
 local World = {}
 World.__index = {}
 
 function World.new()
     return setmetatable(
-        {_allocator=EntityAllocator.new(), _storage=ArchetypeStorage.new(), _archetypeLookup=ComponentColumn.new()},
+        {
+            _allocator       = EntityAllocator.new(),
+            _storage         = ArchetypeStorage.new(),
+            _archetypeLookup = ComponentTable.new({1})
+        },
         World
     )
 end
 
 ---@param self arlu.World
----@param components arlu.ComponentSet?
----@return EntityBuilder
-function World.entityBuild(self, components)
-    local id = self._allocator:alloc()
-    return EntityBuilder.new(self, id, components)
-end
-
----@param self arlu.World
 ---@param components arlu.ComponentSet
 ---@return arlu.EId
-function World.entitySpawn(self, components)
+function World.spawn(self, components)
     local id = self._allocator:alloc()
-    self:_initEntity(id, components)
+    self:_entityArchetypeSet(id, components)
     return id
 end
 
 ---@param self arlu.World
 ---@param eId arlu.EId
-function World.entityDestroy(self, eId)
-    -- self._archetypeLookup:set(eId, nil)
-    -- self._allocator:freeUnchecked(eId)
+function World.destroy(self, eId)
+    self:_entityArchetypeRemove(eId)
+    self._allocator:freeUnchecked(eId)
+end
+
+---@param self arlu.World
+---@param eId arlu.EId
+---@param components arlu.ComponentSet
+---@param replace boolean?
+function World.attach(self, eId, components, replace)
+    local existing = self:_entityArchetypeRemove(eId)
+    if existing == nil then error("Archetype for entity does not exist.") end
+    if replace then
+        self:_entityArchetypeSet(eId, components)
+    else
+        for k,v in pairs(components) do existing[k] = v end
+        self:_entityArchetypeSet(eId, existing)
+    end
+end
+
+---@param self arlu.World
+---@param eId arlu.EId
+---@param components arlu.ComponentSet?
+function World.detach(self, eId, components)
+    local existing = self:_entityArchetypeRemove(eId)
+    if components == nil then
+        self:_entityArchetypeSet(eId, {})
+    else
+        for k,_ in pairs(components) do existing[k] = nil end
+        self:_entityArchetypeSet(eId, components)
+    end
 end
 
 ---@param self arlu.World
 ---@param entity arlu.EId
 ---@param components arlu.ComponentSet
-function World._initEntity(self, entity, components)
-    --TODO how do we want to handle empty entities
-    -- if components ~= nil and next(components) ~= nil then
+function World._entityArchetypeSet(self, entity, components)
     local archetype, id = self._storage:getOrCreateTable(components)
-    archetype:insert(entity, components)
-    self._archetypeLookup:set(entity, id)
+    archetype:set(entity, components)
+    self._archetypeLookup:set(entity, {id})
 end
 
-function World.getComponent(self, entity, component)
-    --TODO do we want to fail on bad entity and/or bad component lookup?
-    local archetype = self._archetypeLookup:get(entity) --[[@as arlu.IdArchetype?]]
-    if archetype == nil then
-        error("Entity does not exist")
-    end
-    return self._storage:getTableById(archetype):get(entity, component)
+---@param self arlu.World
+---@param eId arlu.EId
+function World._entityArchetypeRemove(self, eId)
+    local archetype = self:_getEntityArchetype(eId)
+    if not archetype then error("No archetype for entity") end
+    self._archetypeLookup:set(eId, nil)
+    return archetype:set(eId, nil)
+end
+
+---@param self arlu.World
+---@param eId arlu.EId
+---@return any
+function World.get(self, eId)
+    local archetype = self:_getEntityArchetype(eId)
+    return archetype and archetype:get(eId)
+end
+
+---@param self arlu.World
+---@param cId arlu.CId
+---@param eId arlu.EId
+---@return any
+function World.getComponent(self, cId, eId)
+    local archetype = self:_getEntityArchetype(eId)
+    return archetype and archetype:getComponent(cId, eId)
 end
 
 ---@param self arlu.World
@@ -1062,6 +1051,16 @@ end
 function World.query(self, filter)
     local _,id = self._storage:query(filter, nil)
     return Query.new(id)
+end
+
+---@param self arlu.World
+---@param eId arlu.EId
+---@return arlu.ComponentTable | nil
+function World._getEntityArchetype(self, eId)
+    -- We're using 1 as a fixed-access cId since the lookup is not using regular components
+    ---@diagnostic disable-next-line: param-type-mismatch
+    local aId = self._archetypeLookup:getComponent(1, eId)
+    return aId and self._storage:getTableById(aId)
 end
 
 ------------------------------------------------------------------------------
@@ -1352,25 +1351,25 @@ return {
         SOFTWARE.
     ]],
 
-    EId           = EId,        -- Tests: Initial
-    EntityAllocator    = EntityAllocator, -- Tests: Initial
+    EId             = EId,             -- Tests: Initial
+    EntityAllocator = EntityAllocator, -- Tests: Initial
 
-    CId         = CId,         -- Tests: Initial
-    ComponentColumn     = ComponentColumn,     -- Tests: Initial
+    CId            = CId,            -- Tests: Initial
+    ComponentTable = ComponentTable, -- Tests: Initial
 
     ComponentSet        = ComponentSet,        -- Tests: TODO
     ComponentSetFilter  = ComponentSetFilter,  -- Tests: TODO
     ComponentSetStorage = ComponentSetStorage, -- Tests: TODO
 
-    ArchetypeTable     = ArchetypeTable,    -- Tests: TODO
     ArchetypeStorage   = ArchetypeStorage,  -- Tests: TODO
 
-    QueryEntity   = QueryEntity,   -- Tests: TODO
-    Query         = Query,         -- Tests: TODO
-    EntityBuilder = EntityBuilder, -- Tests: TODO
-    World         = World,         -- Tests: TODO
+    QueryEntity   = QueryEntity, -- Tests: TODO
+    Query         = Query,       -- Tests: TODO
+    World         = World,       -- Tests: TODO
 
     System          = System,          -- Tests: Initial
     Schedule        = Schedule,        -- Tests: Initial
     ScheduleBuilder = ScheduleBuilder, -- Tests: Initial
+
+    SystemQuery = SystemQuery, -- Tests: TODO
 }
