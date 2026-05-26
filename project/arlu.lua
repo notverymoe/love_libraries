@@ -561,7 +561,7 @@ end
 --#region ComponentSetFilter
 ------------------------------------------------------------------------------
 
----@alias arlu.ComponentSetFilter {includes: arlu.ComponentSet, excludes: arlu.ComponentSet} | arlu.ComponentSet
+---@alias arlu.ComponentSetFilter {requires: arlu.ComponentSet, excludes: arlu.ComponentSet?} | arlu.ComponentSet
 
 ---@class arlu.ModuleComponentSetFilter
 local ComponentSetFilter = {}
@@ -570,8 +570,8 @@ local ComponentSetFilter = {}
 ---@param a arlu.ComponentSetFilter
 ---@return arlu.ComponentSet
 ---@nodiscard
-function ComponentSetFilter.includes(a)
-    return a.includes or a
+function ComponentSetFilter.requires(a)
+    return a.requires or a
 end
 
 ---Returns the ComponentSet representing the excluded components
@@ -587,8 +587,8 @@ end
 ---@param b arlu.ComponentSet item
 ---@return boolean
 ---@nodiscard
-function ComponentSetFilter.accepts(a, b)
-    return ComponentSet.all(ComponentSetFilter.includes(a), b) and
+function ComponentSetFilter.matches(a, b)
+    return ComponentSet.all(ComponentSetFilter.requires(a), b) and
        not ComponentSet.any(ComponentSetFilter.excludes(a), b)
 end
 
@@ -599,8 +599,8 @@ end
 ---@nodiscard
 function ComponentSetFilter.exact(a, b)
     return ComponentSet.exact(
-        ComponentSetFilter.includes(a),
-        ComponentSetFilter.includes(b)
+        ComponentSetFilter.requires(a),
+        ComponentSetFilter.requires(b)
     ) and ComponentSet.exact(
         ComponentSetFilter.excludes(a),
         ComponentSetFilter.excludes(b)
@@ -638,7 +638,7 @@ function ComponentSetStorage.insert(self, k, v)
         self._next = self._next + 1
 
         -- Add to lookup
-        for part,_ in pairs(ComponentSetFilter.includes(k)) do
+        for part,_ in pairs(ComponentSetFilter.requires(k)) do
             local group = self._groups[part] or {}
             table.insert(group, {key=k, idx=idx})
             self._groups[part] = group
@@ -649,22 +649,49 @@ function ComponentSetStorage.insert(self, k, v)
     return idx
 end
 
-function ComponentSetStorage.remove(self, k)
+-- TODO
+-- function ComponentSetStorage.remove(self, k)
 
+-- end
+
+---Finds all composite keys that match the given filter
+---@param self arlu.ComponentSetStorage
+---@param requires arlu.ComponentSet The list of components search with
+---@param excludes arlu.ComponentSet? If provided, assumes filter is the required component set and creates a filter
+---@return table<integer, any> results Pairs of data index and data that accepted the given component set
+---@overload fun(self: arlu.ComponentSetStorage, filter: arlu.ComponentSetFilter): table<integer, any>
+---@nodiscard
+function ComponentSetStorage.filter(self, requires, excludes)
+    local filter = requires
+    if excludes ~= nil then
+        filter = {requires=requires, excludes=excludes}
+    end
+
+    local found = {}
+    for part,_ in pairs(ComponentSetFilter.requires(filter)) do
+        local group = self._groups[part]
+        if group ~= nil then
+            for _,entry in ipairs(group) do
+                if found[entry.idx] == nil and ComponentSetFilter.matches(filter, ComponentSetFilter.requires(entry.key)) then
+                    found[entry.idx] = self._data[entry.idx]
+                end
+            end
+        end
+    end
+    return found
 end
 
 ---Finds all composite keys that accept the given components
 ---@param self arlu.ComponentSetStorage
 ---@param components arlu.ComponentSet The list of components search with
----@return table<integer, any> results Pairs of data index and data that accepted the given component set
 ---@nodiscard
 function ComponentSetStorage.query(self, components)
     local found = {}
-    for part,_ in pairs(ComponentSetFilter.includes(components)) do
+    for part,_ in pairs(ComponentSetFilter.requires(components)) do
         local group = self._groups[part]
         if group ~= nil then
             for _,entry in ipairs(group) do
-                if found[entry.idx] == nil and ComponentSetFilter.accepts(entry.key, components) then
+                if found[entry.idx] == nil and ComponentSetFilter.matches(entry.key, components) then
                     found[entry.idx] = self._data[entry.idx]
                 end
             end
@@ -699,7 +726,7 @@ end
 ---@nodiscard
 function ComponentSetStorage.indexOf(self, k)
     --TODO OPT we could find the smallest group?
-    for part,_ in pairs(ComponentSetFilter.includes(k)) do
+    for part,_ in pairs(ComponentSetFilter.requires(k)) do
         local group = self._groups[part]
         if group == nil then
             return nil -- If the group doesn't exist we don't store the key
@@ -803,7 +830,7 @@ end
 ---@return arlu.AId[]
 function ArchetypeStorage.queryRaw(self, filter)
     local results = {}
-    for idx,data in pairs(self._archetypes:query(ComponentSetFilter.includes(filter))) do
+    for idx,data in pairs(self._archetypes:filter(ComponentSetFilter.requires(filter))) do
         local components = data --[[@as arlu.ComponentTable]]
         if not ComponentSet.any(ComponentSetFilter.excludes(filter), components:columns()) then
             table.insert(results, idx)
@@ -963,11 +990,14 @@ end
 ---Creates a system setup function that initializes
 ---a query from the world and passes it as userdata
 ---@param name string
----@param includes arlu.CId[]
+---@param requires arlu.CId[]
 ---@param excludes arlu.CId[]
 ---@return fun(userdata: table, args: table)
-function SystemQuery(name, includes, excludes)
-    local filter = {includes=includes or {}, excludes=excludes or {}}
+function SystemQuery(name, requires, excludes)
+    local filter = {
+        requires=ComponentSet.fromArray(requires or {}),
+        excludes=ComponentSet.fromArray(excludes or {})
+    }
     return function(userdata, args)
         local world = args.world --[[@as arlu.World]]
         local query = world:query(filter)
@@ -1393,8 +1423,8 @@ return {
     ComponentTable = ComponentTable, -- Tests: Initial
 
     ComponentSet        = ComponentSet,        -- Tests: Initial
-    ComponentSetFilter  = ComponentSetFilter,  -- Tests: TODO
-    ComponentSetStorage = ComponentSetStorage, -- Tests: TODO
+    ComponentSetFilter  = ComponentSetFilter,  -- Tests: Initial
+    ComponentSetStorage = ComponentSetStorage, -- Tests: Initial
 
     ArchetypeStorage   = ArchetypeStorage,  -- Tests: TODO
 
