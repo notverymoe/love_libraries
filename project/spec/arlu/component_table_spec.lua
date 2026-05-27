@@ -158,13 +158,26 @@ describe("ComponentTable", function()
     it("[REG] Fetch non-existent component should return nil", function()
         local storage = arlu.ComponentTable.new({1})
         storage:set(arlu.EId.new(1,1), {100})
+
+        
+        ---@diagnostic disable-next-line: param-type-mismatch
         assert.are_equal(100, storage:getComponent(1, arlu.EId.new(1,1))) -- Stored component id, Stored Entity
+
+        ---@diagnostic disable-next-line: param-type-mismatch
         assert.is_nil(storage:getComponent(2, arlu.EId.new(1,1))) -- Unstored id, Stored Entity
 
+
+        ---@diagnostic disable-next-line: param-type-mismatch
         assert.is_nil(storage:getComponent(1, arlu.EId.new(1,2))) -- Stored component id, Unstored Entity (Bad gen)
+
+        ---@diagnostic disable-next-line: param-type-mismatch
         assert.is_nil(storage:getComponent(2, arlu.EId.new(1,2))) -- Unstored id, Unstored Entity (Bad gen)
 
+
+        ---@diagnostic disable-next-line: param-type-mismatch
         assert.is_nil(storage:getComponent(1, arlu.EId.new(2))) -- Stored component id, Unstored Entity (Bad index)
+
+        ---@diagnostic disable-next-line: param-type-mismatch
         assert.is_nil(storage:getComponent(2, arlu.EId.new(2))) -- Unstored id, Unstored Entity (Bad index)
     end)
 
