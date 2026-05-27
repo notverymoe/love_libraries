@@ -278,10 +278,14 @@ end
 function ComponentTable.set(self, eId, values, force)
     local existing = self:_getSlot(eId)
     if values == nil then
-        if (not force) and (existing.generation ~= eId.generation) then
-            error("Entity ID generation mismatch.")
+        if existing.index > 0 then
+            if (not force) and (existing.generation ~= eId.generation) then
+                error("Entity ID generation mismatch.")
+            end
+            return self:_remove(existing)
+        else
+            return nil
         end
-        return self:_remove(existing)
     elseif (existing.index > 0) then
         if (not force) and (existing.generation ~= eId.generation) then
             error("Slot already contains a different generation, cannot reuse unless forced or removed first.")
@@ -298,7 +302,6 @@ end
 ---@param eId arlu.EId
 ---@return table<arlu.CId, any> | nil
 function ComponentTable.get(self, eId)
-    self._count = self._count + 1
     local slot = self:_getSlot(eId)
     if (slot.index      <=              0) then return nil end
     if (slot.generation ~= eId.generation) then return nil end
@@ -309,7 +312,6 @@ end
 ---@param eId arlu.EId
 ---@return any | nil
 function ComponentTable.getComponent(self, cId, eId)
-    self._count = self._count + 1
     local slot = self:_getSlot(eId)
     if (slot.index      <=              0) then return nil end
     if (slot.generation ~= eId.generation) then return nil end
@@ -358,7 +360,7 @@ function ComponentTable.getSlotData(self, cId, slotIdx)
         error("Attempt to index out of bounds, slot idx not allocated")
     end
     local data = self._data[cId]
-    return data ~= nil and data[slotIdx]
+    return data and data[slotIdx]
 end
 
 ---@param self arlu.ComponentTable
@@ -838,6 +840,8 @@ end
 function ArchetypeStorage.queryRaw(self, filter)
     local results = {}
     for idx,_ in pairs(self._archetypes:filter(filter)) do
+        -- TODO OPT exclude zero-length archetypes we also need to make it so the
+        --          cache is updated when archetypes are emptied or un-emptied.
         table.insert(results, idx)
     end
     return results
@@ -920,14 +924,14 @@ end
 
 ---@param self arlu.Query
 ---@param world arlu.World
----@return arlu.EId[]
+---@return arlu.QueryEntity[]
 function Query.collect(self, world)
     local archetypes,_ = world._storage:query(nil, self._id)
     local entities = {}
     for _,idArchetype in ipairs(archetypes) do
         local archetype = world._storage:getTableById(idArchetype)
         for i=1,archetype:count() do
-            table.insert(entities[idArchetype], QueryEntity._new(archetype, i))
+            table.insert(entities, QueryEntity._new(archetype, i))
         end
     end
     return entities
@@ -1022,8 +1026,9 @@ end
 ---@field _storage arlu.ArchetypeStorage
 ---@field _archetypeLookup arlu.ComponentTable
 local World = {}
-World.__index = {}
+World.__index = World
 
+---@return arlu.World
 function World.new()
     return setmetatable(
         {
@@ -1070,12 +1075,12 @@ end
 ---@param eId arlu.EId
 ---@param components arlu.ComponentSet?
 function World.detach(self, eId, components)
-    local existing = self:_entityArchetypeRemove(eId)
+    local existing = self:_entityArchetypeRemove(eId) or {}
     if components == nil then
         self:_entityArchetypeSet(eId, {})
     else
         for k,_ in pairs(components) do existing[k] = nil end
-        self:_entityArchetypeSet(eId, components)
+        self:_entityArchetypeSet(eId, existing)
     end
 end
 
@@ -1434,7 +1439,7 @@ return {
 
     QueryEntity   = QueryEntity, -- Tests: TODO
     Query         = Query,       -- Tests: TODO
-    World         = World,       -- Tests: TODO
+    World         = World,       -- Tests: Initial
 
     System          = System,          -- Tests: Initial
     Schedule        = Schedule,        -- Tests: Initial

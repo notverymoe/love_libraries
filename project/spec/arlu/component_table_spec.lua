@@ -155,4 +155,34 @@ describe("ComponentTable", function()
         )
     end)
 
+    it("[REG] Fetch non-existent component should return nil", function()
+        local storage = arlu.ComponentTable.new({1})
+        storage:set(arlu.EId.new(1,1), {100})
+        assert.are_equal(100, storage:getComponent(1, arlu.EId.new(1,1))) -- Stored component id, Stored Entity
+        assert.is_nil(storage:getComponent(2, arlu.EId.new(1,1))) -- Unstored id, Stored Entity
+
+        assert.is_nil(storage:getComponent(1, arlu.EId.new(1,2))) -- Stored component id, Unstored Entity (Bad gen)
+        assert.is_nil(storage:getComponent(2, arlu.EId.new(1,2))) -- Unstored id, Unstored Entity (Bad gen)
+
+        assert.is_nil(storage:getComponent(1, arlu.EId.new(2))) -- Stored component id, Unstored Entity (Bad index)
+        assert.is_nil(storage:getComponent(2, arlu.EId.new(2))) -- Unstored id, Unstored Entity (Bad index)
+    end)
+
+    it("[REG] Component access should not increment count", function()
+        local storage = arlu.ComponentTable.new({1,2})
+        storage:set(arlu.EId.new(1,1), {100,200})
+        assert.are_equal(1, storage._count)
+        ---@diagnostic disable-next-line: param-type-mismatch
+        storage:getComponent(1, arlu.EId.new(1,1))
+        assert.are_equal(1, storage._count)
+        storage:get(arlu.EId.new(1,1))
+        assert.are_equal(1, storage._count)
+    end)
+
+    it("[REG] Attempt to remove non-existent entity should be no-op", function()
+        local storage = arlu.ComponentTable.new({1,2})
+        storage:set(arlu.EId.new(1,1), {100,200})
+        storage:set(arlu.EId.new(2,1), nil)
+    end)
+
 end)
