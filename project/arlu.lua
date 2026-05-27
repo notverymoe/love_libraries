@@ -572,7 +572,11 @@ local ComponentSetFilter = {}
 ---@param excludes arlu.CId[]?
 ---@return arlu.ComponentSetFilter
 function ComponentSetFilter.from(requires, excludes)
-    return excludes == nil and ComponentSet.fromArray(requires) or {requires=ComponentSet.fromArray(requires), excludes=ComponentSet.fromArray(excludes)}
+    if excludes == nil then
+        return ComponentSet.fromArray(requires)
+    else
+        return {requires=ComponentSet.fromArray(requires), excludes=ComponentSet.fromArray(excludes)}
+    end
 end
 
 ---Returns the ComponentSet representing the included (required) components
