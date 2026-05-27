@@ -566,6 +566,13 @@ end
 ---@class arlu.ModuleComponentSetFilter
 local ComponentSetFilter = {}
 
+---@param requires arlu.CId[]
+---@param excludes arlu.CId[]?
+---@return arlu.ComponentSetFilter
+function ComponentSetFilter.from(requires, excludes)
+    return excludes == nil and ComponentSet.fromArray(requires) or {requires=ComponentSet.fromArray(requires), excludes=ComponentSet.fromArray(excludes)}
+end
+
 ---Returns the ComponentSet representing the included (required) components
 ---@param a arlu.ComponentSetFilter
 ---@return arlu.ComponentSet
@@ -830,11 +837,8 @@ end
 ---@return arlu.AId[]
 function ArchetypeStorage.queryRaw(self, filter)
     local results = {}
-    for idx,data in pairs(self._archetypes:filter(ComponentSetFilter.requires(filter))) do
-        local components = data --[[@as arlu.ComponentTable]]
-        if not ComponentSet.any(ComponentSetFilter.excludes(filter), components:columns()) then
-            table.insert(results, idx)
-        end
+    for idx,_ in pairs(self._archetypes:filter(filter)) do
+        table.insert(results, idx)
     end
     return results
 end
@@ -1426,7 +1430,7 @@ return {
     ComponentSetFilter  = ComponentSetFilter,  -- Tests: Initial
     ComponentSetStorage = ComponentSetStorage, -- Tests: Initial
 
-    ArchetypeStorage   = ArchetypeStorage,  -- Tests: TODO
+    ArchetypeStorage   = ArchetypeStorage,  -- Tests: Initial
 
     QueryEntity   = QueryEntity, -- Tests: TODO
     Query         = Query,       -- Tests: TODO
